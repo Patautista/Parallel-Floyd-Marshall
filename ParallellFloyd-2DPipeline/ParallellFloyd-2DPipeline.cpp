@@ -9,6 +9,38 @@
 
 #define INF INT_MAX
 
+void write_matrix_to_file(int** D, int n, int rank, int size, const std::string& filename) {
+    int block_size = n / size;
+    std::ofstream file;
+
+    if (rank == 0) {
+        file.open(filename);
+        if (!file.is_open()) {
+            std::cerr << "Unable to open file for writing." << std::endl;
+            return;
+        }
+    }
+
+    // Temporary buffer for gathering the matrix blocks at root process
+    int* temp_matrix = new int[n * n];
+    for (int i = 0; i < block_size; ++i) {
+        MPI_Gather(D[i], block_size, MPI_INT, rank == 0 ? &temp_matrix[i * n] : nullptr, block_size, MPI_INT, 0, MPI_COMM_WORLD);
+    }
+
+    if (rank == 0) {
+        // Write the matrix to the file
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
+                file << temp_matrix[i * n + j] << " ";
+            }
+            file << std::endl;
+        }
+        file.close();
+    }
+
+    delete[] temp_matrix;
+}
+
 void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const std::string& filename) {
     std::ifstream file(filename);
     if (file.is_open()) {
@@ -114,7 +146,8 @@ int main(int argc, char** argv) {
     // Perform the parallel Floyd-Warshall algorithm
     floyd_all_pairs_parallel(matrix, matrix.size());
 
-    // ... (rest of the code to gather and print the result)
+    // Write the results to a file
+    write_matrix_to_file(D, n, rank, size, "output_matrix.txt");
 
     for (int i = 0; i < block_size; ++i) {
         delete[] D[i];
