@@ -1,0 +1,104 @@
+# Executable files
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Object files and dynamic libs
+*.o
+*.obj
+*.a
+*.lib
+*.ko
+*.so
+*.out
+
+# Debug files
+*.pdb
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Static libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Build folders
+build/
+bin/
+obj/
+out/
+
+# Dependency directories (like those used by CMake)
+deps/
+vendor/
+
+# Backup & log files
+*.bak
+*.log
+*.tmp
+
+# Other files to ignore
+*.suo
+*.user
+*.userprefs
+*.sdf
+*.config
+*.vcxproj.*
+*.vspscc
+*.vssscc
+*._i.c
+*._p.c
+*._h.c
+*.dblite
+*.db
+*.opendb
+*.opensdf
+
+# Ignore editor directories and files
+.vs/
+.vscode/
+*.swp
+*.*.swp
+*~
+.DS_Store
+
+# Ignore CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.make
+*.cmake
+
+# Ignore specific system files
+Thumbs.db
+Desktop.ini
+
+# Eclipse files
+.metadata
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+
+# IntelliJ IDEA files
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Xcode files
+*.xcuserstate
+project.xcworkspace
+xcuserdata
+DerivedData/
