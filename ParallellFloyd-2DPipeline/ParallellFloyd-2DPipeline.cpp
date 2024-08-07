@@ -9,7 +9,7 @@
 
 #define INF INT_MAX
 
-void write_matrix_to_file(int** D, int n, int rank, int size, const std::string& filename) {
+void write_matrix_to_file(const std::vector<std::vector<int>>& D, int n, int rank, int size, const std::string& filename) {
     int block_size = n / size;
     std::ofstream file;
 
@@ -24,7 +24,7 @@ void write_matrix_to_file(int** D, int n, int rank, int size, const std::string&
     // Temporary buffer for gathering the matrix blocks at root process
     int* temp_matrix = new int[n * n];
     for (int i = 0; i < block_size; ++i) {
-        MPI_Gather(D[i], block_size, MPI_INT, rank == 0 ? &temp_matrix[i * n] : nullptr, block_size, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Gather(D[i].data(), block_size, MPI_INT, rank == 0 ? &temp_matrix[i * n] : nullptr, block_size, MPI_INT, 0, MPI_COMM_WORLD);
     }
 
     if (rank == 0) {
@@ -185,26 +185,26 @@ int main(int argc, char** argv) {
 
     // Initialize local block for each process
     int block_size = n / dims[0];
-    int** D = new int* [block_size];
+    int** matrix_buffer = new int* [block_size];
     for (int i = 0; i < block_size; ++i) {
-        D[i] = new int[block_size];
+        matrix_buffer[i] = new int[block_size];
     }
 
     // Distribute the matrix data to all processes
     for (int i = 0; i < block_size; ++i) {
-        MPI_Scatter(rank == 0 ? matrix[i].data() : nullptr, block_size, MPI_INT, D[i], block_size, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Scatter(rank == 0 ? matrix[i].data() : nullptr, block_size, MPI_INT, matrix_buffer[i], block_size, MPI_INT, 0, MPI_COMM_WORLD);
     }
 
     // Perform the parallel Floyd-Warshall algorithm
     floyd_all_pairs_parallel(matrix, matrix.size());
 
     // Write the results to a file
-    write_matrix_to_file(D, n, rank, size, "output_matrix.txt");
+    write_matrix_to_file(matrix, n, rank, size, "output_matrix.txt");
 
     for (int i = 0; i < block_size; ++i) {
-        delete[] D[i];
+        delete[] matrix_buffer[i];
     }
-    delete[] D;
+    delete[] matrix_buffer;
 
     MPI_Comm_free(&row_comm);
     MPI_Comm_free(&col_comm);
