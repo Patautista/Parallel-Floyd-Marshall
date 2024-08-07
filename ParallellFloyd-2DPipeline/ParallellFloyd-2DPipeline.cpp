@@ -5,7 +5,7 @@
 #include <ctime>
 #include <climits>
 #include <fstream>
-
+#include <sstream>
 
 #define INF INT_MAX
 
@@ -44,14 +44,32 @@ void write_matrix_to_file(int** D, int n, int rank, int size, const std::string&
 void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const std::string& filename) {
     std::ifstream file(filename);
     if (file.is_open()) {
-        int n;
-        file >> n;
-        matrix.resize(n, std::vector<int>(n));
-        for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < n; ++j) {
-                file >> matrix[i][j];
+        std::string line;
+        std::vector<std::vector<int>> temp_matrix;
+
+        // Read the file line by line
+        while (std::getline(file, line)) {
+            std::vector<int> row;
+            std::stringstream ss(line);
+            int value;
+            while (ss >> value) {
+                row.push_back(value);
+            }
+            temp_matrix.push_back(row);
+        }
+
+        // Check if the matrix is square
+        size_t n = temp_matrix.size();
+        for (const auto& row : temp_matrix) {
+            if (row.size() != n) {
+                std::cerr << "Error: Matrix is not square." << std::endl;
+                return;
             }
         }
+
+        // Assign the temporary matrix to the output matrix
+        matrix = temp_matrix;
+
         file.close();
     }
     else {
@@ -94,8 +112,42 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& D, int n) {
                 }
             }
         }
+
+        // Print debug information
+        if (rank == 0) {
+            std::cout << "Iteration k=" << k << "\n";
+            std::cout << "Row buffer: ";
+            for (const auto& val : row_buffer) {
+                std::cout << val << " ";
+            }
+            std::cout << "\n";
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD); // Ensure all processes sync before printing column buffer
+
+        if (rank == 0) {
+            std::cout << "Column buffer from process " << owner_col << ": ";
+            for (const auto& val : col_buffer) {
+                std::cout << val << " ";
+            }
+            std::cout << "\n";
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD); // Ensure all processes sync before next iteration
+    }
+
+    // Print final matrix
+    if (rank == 0) {
+        std::cout << "Final distance matrix:\n";
+        for (const auto& row : D) {
+            for (const auto& val : row) {
+                std::cout << val << " ";
+            }
+            std::cout << "\n";
+        }
     }
 }
+
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
@@ -159,5 +211,6 @@ int main(int argc, char** argv) {
     MPI_Comm_free(&grid_comm);
 
     MPI_Finalize();
+    system("pause");
     return 0;
 }

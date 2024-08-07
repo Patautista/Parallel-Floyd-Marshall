@@ -7,6 +7,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ParallellFloyd-2DPipeline",
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GraphGenerator", "GraphGenerator\GraphGenerator.vcxproj", "{EE0C2BF7-28D3-4562-A729-DAE3B18D6BA1}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{BA39C00E-63A8-4A50-864D-9D73DB69A9A0}"
+	ProjectSection(SolutionItems) = preProject
+		samples\visualization.py = samples\visualization.py
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
