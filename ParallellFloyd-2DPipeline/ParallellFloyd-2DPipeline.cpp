@@ -6,6 +6,7 @@
 #include <climits>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
 
 #define INF INT_MAX
 
@@ -156,6 +157,17 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
+    // Check if the input matrix file path is provided as a command-line argument
+    if (argc < 2) {
+        if (rank == 0) {
+            std::cerr << "Usage: " << argv[0] << " <input_matrix_file_path>" << std::endl;
+        }
+        MPI_Finalize();
+        return 1;
+    }
+
+    std::string input_file_path = argv[1];
+
     // Assuming we are using a square process grid
     int dims[2] = { 0, 0 };
     MPI_Dims_create(size, 2, dims);
@@ -176,7 +188,7 @@ int main(int argc, char** argv) {
 
     // Only the root process reads the matrix from the file
     if (rank == 0) {
-        read_matrix_from_file(matrix, "C:\\Users\\caleb\\source\\repos\\ParallellFloyd-2DPipeline\\matrix.txt");
+        read_matrix_from_file(matrix, input_file_path);
         n = matrix.size();
     }
 
@@ -198,8 +210,11 @@ int main(int argc, char** argv) {
     // Perform the parallel Floyd-Warshall algorithm
     floyd_all_pairs_parallel(matrix, matrix.size());
 
-    // Write the results to a file
-    write_matrix_to_file(matrix, n, rank, size, "output_matrix.txt");
+    // Create the output file path in the same directory as the input file
+    std::filesystem::path output_file_path = std::filesystem::path(input_file_path).parent_path() / "output_matrix.txt";
+
+    // Write the results to the output file
+    write_matrix_to_file(matrix, n, rank, size, output_file_path.string());
 
     for (int i = 0; i < block_size; ++i) {
         delete[] matrix_buffer[i];
@@ -211,6 +226,5 @@ int main(int argc, char** argv) {
     MPI_Comm_free(&grid_comm);
 
     MPI_Finalize();
-    system("pause");
     return 0;
 }

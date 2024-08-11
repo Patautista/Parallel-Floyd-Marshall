@@ -26,7 +26,7 @@ def create_graph_from_matrix(matrix):
     G = nx.DiGraph()
     n = matrix.shape[0]
     for i in range(n):
-        for j in range(i + 1, n):  # Limit to upper triangular part
+        for j in range(n): 
             if matrix[i, j] != 0 and matrix[i, j] != np.inf:  # Skip zero weights and infinities
                 G.add_edge(i, j, weight=matrix[i, j])
     return G
@@ -34,10 +34,13 @@ def create_graph_from_matrix(matrix):
 def visualize_graph(G, output_path, filename):
     pos = nx.circular_layout(G)
     edges = G.edges(data=True)
+    print(edges, end='\n\n')
 
     plt.figure(figsize=(24, 16))
-    nx.draw(G, pos, with_labels=True, node_size=700, node_color='skyblue', arrows=True)
-    nx.draw_networkx_edge_labels(G, pos, edge_labels={(u, v): d['weight'] for u, v, d in edges})
+    nx.draw(G, pos, with_labels=True, node_size=500, node_color='skyblue', arrows=True, edgelist=[])
+    nx.draw_networkx_edges(G, pos, edgelist=G.edges(), connectionstyle='arc3,rad=0.2')
+    nx.draw_networkx_edge_labels(G, pos, edge_labels={(u, v): d['weight'] for u, v, d in edges}, connectionstyle='arc3,rad=0.2')
+
     plt.title(f'Graph Visualization of {filename}')
     plt.savefig(os.path.join(output_path, filename))  # Save as PNG
     plt.close()
@@ -65,10 +68,7 @@ def main():
         return
 
     matrix = read_matrix_from_file(matrix_file_path)
-    
-    # Save matrix to the subfolder (although it's already present)
-    save_matrix_to_file(matrix, matrix_file_path)
-    
+
     # Create graph from matrix
     G = create_graph_from_matrix(matrix)
     
@@ -77,11 +77,11 @@ def main():
 
     # Save the output matrix
     output_matrix_file_path = os.path.join(subfolder_path, 'output_matrix.txt')
-    save_matrix_to_file(matrix, output_matrix_file_path)
     
     # Create and save graph from the output matrix
     output_matrix = read_matrix_from_file(output_matrix_file_path)
     G_output = create_graph_from_matrix(output_matrix)
+
     visualize_graph(G_output, subfolder_path, 'output_graph.png')
 
 if __name__ == '__main__':
