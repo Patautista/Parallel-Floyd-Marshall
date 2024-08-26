@@ -24,11 +24,11 @@ void write_matrix_to_file(const std::vector<std::vector<int>>& D, int n, int ran
 
     // Temporary buffer for gathering the matrix blocks at root process
     int* temp_matrix = new int[n * n];
-    /*
+    
     for (int i = 0; i < block_size; ++i) {
         MPI_Gather(D[i].data(), block_size, MPI_INT, rank == 0 ? &temp_matrix[i * n] : nullptr, block_size, MPI_INT, 0, MPI_COMM_WORLD);
     }
-    */
+
     if (rank == 0) {
         // Write the matrix to the file
         for (int i = 0; i < n; ++i) {
@@ -98,36 +98,35 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& D, int n) {
     for (int k = 0; k < n; ++k) {
         std::cout << rank << ": Floyd loop\n";
         int owner_row = k / row_per_proc;
-        /*
+        
         // Row Responsibility: owner_row determines which process is responsible for broadcasting a particular row k. 
         // If the current process is responsible, it fills row_buffer with that row.
 
         if (rank == owner_row) {
             for (int j = 0; j < n; ++j) {
+                //std::cout << rank << ": j: " << j << "\n";
+                //std::cout << rank << ": D size: " << D[k % row_per_proc].size() << "\n";
                 row_buffer[j] = D[k % row_per_proc][j];
             }
         }
-        */
         MPI_Bcast(row_buffer.data(), n, MPI_INT, owner_row, MPI_COMM_WORLD);
 
         
         int owner_col = k / row_per_proc;
         // Column Responsibility: owner_col determines which process is responsible for broadcasting a particular column k. 
         // If the current process is responsible, it fills col_buffer with that column.
-        /*
         if (rank % sqrt_p == owner_col) {
             for (int i = 0; i < row_per_proc; ++i) {
                 col_buffer[i] = D[i][k];
             }
         }
-        */
+        
         MPI_Bcast(col_buffer.data(), row_per_proc, MPI_INT, owner_col, MPI_COMM_WORLD);
 
 
         // Each process updates its block of the matrix D by comparing the current distance D[i][j]
         // with the potential shorter path col_buffer[i] + row_buffer[j]. 
         // If the new path is shorter, it updates D[i][j].
-        /*
         for (int i = 0; i < row_per_proc; ++i) {
             for (int j = 0; j < n; ++j) {
                 if (D[i][j] > col_buffer[i] + row_buffer[j]) {
@@ -135,7 +134,6 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& D, int n) {
                 }
             }
         }
-        */
 
 
         MPI_Barrier(MPI_COMM_WORLD); // Ensure all processes sync before next iteration
@@ -151,8 +149,6 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    std::cout << rank << ":Step 1\n";
-
     // Check if the input matrix file path is provided as a command-line argument
     if (argc < 2) {
         if (rank == 0) {
@@ -164,7 +160,6 @@ int main(int argc, char** argv) {
 
     std::string input_file_path = argv[1];
 
-    // Assuming we are using a square process grid
     int dims[2] = { 0, 0 };
     MPI_Dims_create(size, 2, dims);
 
@@ -182,41 +177,41 @@ int main(int argc, char** argv) {
     int n;
     std::vector<std::vector<int>> matrix;
 
-    // Only the root process reads the matrix from the file
     if (rank == 0) {
         read_matrix_from_file(matrix, input_file_path);
         n = matrix.size();
     }
 
-    // Broadcast the size of the matrix to all processes
     MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    // Initialize local block for each process
     int block_size = n / dims[0];
-    int** matrix_buffer = new int* [block_size];
-    for (int i = 0; i < block_size; ++i) {
-        matrix_buffer[i] = new int[block_size];
+    std::vector<std::vector<int>> matrix_buffer(block_size, std::vector<int>(block_size));
+
+    std::vector<int> flat_matrix;
+    if (rank == 0) {
+        // Flatten the matrix
+        flat_matrix.resize(n * n);
+        for (int i = 0; i < n; ++i) {
+            std::copy(matrix[i].begin(), matrix[i].end(), flat_matrix.begin() + i * n);
+        }
     }
 
-    // Distribute the matrix data to all processes
+    // Scatter the flattened matrix to all processes
+    std::vector<int> flat_block(block_size * block_size);
+    MPI_Scatter(flat_matrix.data(), block_size * block_size, MPI_INT, flat_block.data(), block_size * block_size, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Fill matrix_buffer from the flat_block
     for (int i = 0; i < block_size; ++i) {
-        MPI_Scatter(rank == 0 ? matrix[i].data() : nullptr, block_size, MPI_INT, matrix_buffer[i], block_size, MPI_INT, 0, MPI_COMM_WORLD);
+        std::copy(flat_block.begin() + i * block_size, flat_block.begin() + (i + 1) * block_size, matrix_buffer[i].begin());
     }
 
     // Perform the parallel Floyd-Warshall algorithm
-    std::cout << rank << ":Step 2 " << matrix.size() << "\n";
-    floyd_all_pairs_parallel(matrix, n);
+    floyd_all_pairs_parallel(matrix_buffer, matrix_buffer.size());
 
-    // Create the output file path in the same directory as the input file
     std::filesystem::path output_file_path = std::filesystem::path(input_file_path).parent_path() / "output_matrix.txt";
 
     // Write the results to the output file
-    write_matrix_to_file(matrix, n, rank, size, output_file_path.string());
-
-    for (int i = 0; i < block_size; ++i) {
-        delete[] matrix_buffer[i];
-    }
-    delete[] matrix_buffer;
+    write_matrix_to_file(matrix_buffer, block_size, rank, size, output_file_path.string());
 
     MPI_Comm_free(&row_comm);
     MPI_Comm_free(&col_comm);
