@@ -24,10 +24,11 @@ void write_matrix_to_file(const std::vector<std::vector<int>>& D, int n, int ran
 
     // Temporary buffer for gathering the matrix blocks at root process
     int* temp_matrix = new int[n * n];
+    /*
     for (int i = 0; i < block_size; ++i) {
         MPI_Gather(D[i].data(), block_size, MPI_INT, rank == 0 ? &temp_matrix[i * n] : nullptr, block_size, MPI_INT, 0, MPI_COMM_WORLD);
     }
-
+    */
     if (rank == 0) {
         // Write the matrix to the file
         for (int i = 0; i < n; ++i) {
@@ -106,6 +107,8 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& D, int n) {
         }
         MPI_Bcast(col_buffer.data(), row_per_proc, MPI_INT, owner_col, MPI_COMM_WORLD);
 
+        /*
+        
         for (int i = 0; i < row_per_proc; ++i) {
             for (int j = 0; j < n; ++j) {
                 if (D[i][j] > col_buffer[i] + row_buffer[j]) {
@@ -114,6 +117,7 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& D, int n) {
             }
         }
 
+        */
         // Print debug information
         if (rank == 0) {
             std::cout << "Iteration k=" << k << "\n";
@@ -135,17 +139,6 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& D, int n) {
         }
 
         MPI_Barrier(MPI_COMM_WORLD); // Ensure all processes sync before next iteration
-    }
-
-    // Print final matrix
-    if (rank == 0) {
-        std::cout << "Final distance matrix:\n";
-        for (const auto& row : D) {
-            for (const auto& val : row) {
-                std::cout << val << " ";
-            }
-            std::cout << "\n";
-        }
     }
 }
 
