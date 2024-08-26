@@ -90,25 +90,44 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& D, int n) {
     std::vector<int> row_buffer(n);
     std::vector<int> col_buffer(row_per_proc);
 
+    std::cout << rank << ": Floyd start" << "(" << n << ")\n";
+
+
+    // This loop iterates through each vertex k, 
+    // treating it as an intermediate vertex in potential shortest paths between all pairs of vertices.
     for (int k = 0; k < n; ++k) {
+        std::cout << rank << ": Floyd loop\n";
         int owner_row = k / row_per_proc;
+        /*
+        // Row Responsibility: owner_row determines which process is responsible for broadcasting a particular row k. 
+        // If the current process is responsible, it fills row_buffer with that row.
+
         if (rank == owner_row) {
             for (int j = 0; j < n; ++j) {
                 row_buffer[j] = D[k % row_per_proc][j];
             }
         }
+        */
         MPI_Bcast(row_buffer.data(), n, MPI_INT, owner_row, MPI_COMM_WORLD);
 
+        
         int owner_col = k / row_per_proc;
+        // Column Responsibility: owner_col determines which process is responsible for broadcasting a particular column k. 
+        // If the current process is responsible, it fills col_buffer with that column.
+        /*
         if (rank % sqrt_p == owner_col) {
             for (int i = 0; i < row_per_proc; ++i) {
                 col_buffer[i] = D[i][k];
             }
         }
+        */
         MPI_Bcast(col_buffer.data(), row_per_proc, MPI_INT, owner_col, MPI_COMM_WORLD);
 
+
+        // Each process updates its block of the matrix D by comparing the current distance D[i][j]
+        // with the potential shorter path col_buffer[i] + row_buffer[j]. 
+        // If the new path is shorter, it updates D[i][j].
         /*
-        
         for (int i = 0; i < row_per_proc; ++i) {
             for (int j = 0; j < n; ++j) {
                 if (D[i][j] > col_buffer[i] + row_buffer[j]) {
@@ -116,11 +135,12 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& D, int n) {
                 }
             }
         }
-
         */
+
 
         MPI_Barrier(MPI_COMM_WORLD); // Ensure all processes sync before next iteration
     }
+    std::cout << rank << ": Floyd finish\n";
 }
 
 
@@ -130,6 +150,8 @@ int main(int argc, char** argv) {
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    std::cout << rank << ":Step 1\n";
 
     // Check if the input matrix file path is provided as a command-line argument
     if (argc < 2) {
@@ -182,7 +204,8 @@ int main(int argc, char** argv) {
     }
 
     // Perform the parallel Floyd-Warshall algorithm
-    floyd_all_pairs_parallel(matrix, matrix.size());
+    std::cout << rank << ":Step 2 " << matrix.size() << "\n";
+    floyd_all_pairs_parallel(matrix, n);
 
     // Create the output file path in the same directory as the input file
     std::filesystem::path output_file_path = std::filesystem::path(input_file_path).parent_path() / "output_matrix.txt";
