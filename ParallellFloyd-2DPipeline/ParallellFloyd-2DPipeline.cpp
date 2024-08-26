@@ -118,25 +118,6 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& D, int n) {
         }
 
         */
-        // Print debug information
-        if (rank == 0) {
-            std::cout << "Iteration k=" << k << "\n";
-            std::cout << "Row buffer: ";
-            for (const auto& val : row_buffer) {
-                std::cout << val << " ";
-            }
-            std::cout << "\n";
-        }
-
-        MPI_Barrier(MPI_COMM_WORLD); // Ensure all processes sync before printing column buffer
-
-        if (rank == 0) {
-            std::cout << "Column buffer from process " << owner_col << ": ";
-            for (const auto& val : col_buffer) {
-                std::cout << val << " ";
-            }
-            std::cout << "\n";
-        }
 
         MPI_Barrier(MPI_COMM_WORLD); // Ensure all processes sync before next iteration
     }
