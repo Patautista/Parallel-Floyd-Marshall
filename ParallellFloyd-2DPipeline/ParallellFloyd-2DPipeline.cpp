@@ -145,7 +145,6 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
     // treating it as an intermediate vertex in potential shortest paths between all pairs of vertices.
     for (int k = 1; k < n; ++k) {   
 
-        //std::cout << "iteration " << k << ":\n";
         // Row Responsibility: owner_row determines which process is responsible for broadcasting a particular row k. 
         // If the current process is responsible, it fills row_buffer with that row.
 
@@ -155,8 +154,25 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
         int last_row_owner = (k_grid_row * block_size) + block_size - 1;
         if (int(rank / sqrt_p) < k && k < int(rank / sqrt_p) + block_size + extra_range) {
             int local_row_index = k % block_size;
+            for (int i = 0; i < block_size; i++) {
+                global_row_buffer[(grid_col * block_size) + i] = local_matrix[local_row_index][i];
+            }
 
-            //MPI_Cart_shift(comm, 1, -1, &partner, &left);
+            if (grid_col > 0) {
+                int coords[2];
+                MPI_Cart_coords(comm, rank, 2, coords);
+                coords[1]--;
+                int rec_partner;
+                MPI_Cart_rank(comm, coords, &rec_partner);
+
+                std::vector<int> temp(block_size * grid_col);
+                std::cout << "\niteration " << k << " : " << rank << " receives row from " << rec_partner << "\n";
+                MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                //print_vector(temp);
+                std::cout << "----------------\n\n";
+                std::copy(temp.begin(), temp.end(), global_row_buffer.begin());
+            }
+
             int coords[2];
             MPI_Cart_coords(comm, rank, 2, coords);
             coords[1]++;
@@ -165,11 +181,13 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
                 int partner;
                 MPI_Cart_rank(comm, coords, &partner);
                 std::cout << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
-                //print_vector(global_col_buffer);
+                //print_vector(global_row_buffer);
                 std::cout << "----------------\n\n";
+                MPI_Send(global_row_buffer.data(), block_size * (grid_col + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
             }
         }
-        //MPI_Bcast(global_row_buffer.data(), n, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
+
+        MPI_Bcast(global_row_buffer.data(), n, MPI_INT, last_row_owner, MPI_COMM_WORLD);
         
         // Column Responsibility: owner_col determines which process is responsible for broadcasting a particular column k. 
         // If the current process is responsible, it fills col_buffer with that column.
@@ -187,7 +205,7 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
                 std::vector<int> temp(block_size * grid_row);
                 std::cout << "\niteration " << k << " : " << rank << " receives column from " << rec_partner << "\n";
                 MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                print_vector(temp);
+                //print_vector(temp);
                 std::cout << "----------------\n\n";
                 std::copy(temp.begin(), temp.end(), global_col_buffer.begin());
             }
@@ -199,7 +217,7 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
             int partner = rank + block_size;
             if (partner < size) {
                 std::cout << "\niteration " << k << " : " << rank << " sends column to " << partner << "\n";
-                print_vector(global_col_buffer);
+                //print_vector(global_col_buffer);
                 std::cout << "----------------\n\n";
                 MPI_Send(global_col_buffer.data(), block_size * (grid_row + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
             }
@@ -212,13 +230,12 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
 
 
         //...
-
-        //MPI_Bcast(global_col_buffer.data(), n, MPI_INT, 0, MPI_COMM_WORLD);
         
-        if (rank == 3) {
+        if (rank == 0) {
             std::cout << "rank " << rank << " view:" << "\n";
             std::cout << "iteration " << k << ":\n";
             //std::cout << "last_col_owner " << last_col_owner << ":\n";
+            print_vector(global_row_buffer);
             print_vector(global_col_buffer);
             std::cout << "\n\n";
         }
