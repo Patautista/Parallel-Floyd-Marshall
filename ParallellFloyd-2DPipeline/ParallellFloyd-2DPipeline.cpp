@@ -149,9 +149,13 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
         // Row Responsibility: owner_row determines which process is responsible for broadcasting a particular row k. 
         // If the current process is responsible, it fills row_buffer with that row.
 
-        if (int(rank / sqrt_p) < k && k < int(rank / sqrt_p) + block_size + (rank == n - 1? 1 : 0)) {
+        // adds extra range for last row
+        int extra_range = (grid_row == sqrt_p - 1 ? 1 : 0);
+        int k_grid_row = int(k / block_size);
+        int last_row_owner = (k_grid_row * block_size) + block_size - 1;
+        if (int(rank / sqrt_p) < k && k < int(rank / sqrt_p) + block_size + extra_range) {
             int local_row_index = k % block_size;
-            //std::copy(local_matrix[local_row_index].begin(), local_matrix[local_row_index].end(), global_row_buffer.begin() + int(rank / sqrt_p) * block_size);
+            
         }
         //MPI_Bcast(global_row_buffer.data(), n, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
         
@@ -159,9 +163,12 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
         // If the current process is responsible, it fills col_buffer with that column.
         // rank % sqrt_p < k < (rank % sqrt_p + block_size)
 
-        int last_col_owner = size - block_size + int(k / sqrt_p);
+        // adds extra range for last column
+        extra_range = (grid_col == sqrt_p - 1 ? 1 : 0);
+        // sets column broadcaster index
+        int last_col_owner = size - block_size + int(k / block_size);
         // is column owner
-        if (((rank % sqrt_p) < k && (k < rank % sqrt_p + block_size) + (grid_col == sqrt_p - 1 ? 1 : 0))) {
+        if (((rank % sqrt_p) < k && (k < rank % sqrt_p + block_size) + extra_range)) {
 
             if (grid_row > 0) {
                 int rec_partner = rank - block_size;
@@ -186,9 +193,6 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
             }
         }
         MPI_Bcast(global_col_buffer.data(), n, MPI_INT, last_col_owner, MPI_COMM_WORLD);
-        //MPI_Gather(local_buffer.data(), block_size, MPI_INT, global_col_buffer.data(), block_size, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
-
-
 
         // Each process updates its block of the matrix D by comparing the current distance D[i][j]
         // with the potential shorter path col_buffer[i] + row_buffer[j]. 
@@ -200,7 +204,7 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
         //MPI_Bcast(global_col_buffer.data(), n, MPI_INT, 0, MPI_COMM_WORLD);
         
         if (rank == 3) {
-            std::cout << "rank " << rank << " view:" << ":\n";
+            std::cout << "rank " << rank << " view:" << "\n";
             std::cout << "iteration " << k << ":\n";
             //std::cout << "last_col_owner " << last_col_owner << ":\n";
             print_vector(global_col_buffer);
