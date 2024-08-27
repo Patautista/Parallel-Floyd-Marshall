@@ -166,10 +166,10 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
                 MPI_Cart_rank(comm, coords, &rec_partner);
 
                 std::vector<int> temp(block_size * grid_col);
-                std::cout << "\niteration " << k << " : " << rank << " receives row from " << rec_partner << "\n";
+                //std::cout << "\niteration " << k << " : " << rank << " receives row from " << rec_partner << "\n";
                 MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 //print_vector(temp);
-                std::cout << "----------------\n\n";
+                //std::cout << "----------------\n\n";
                 std::copy(temp.begin(), temp.end(), global_row_buffer.begin());
             }
 
@@ -180,9 +180,9 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
             if (coords[1] < block_size) {
                 int partner;
                 MPI_Cart_rank(comm, coords, &partner);
-                std::cout << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
+                //std::cout << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
                 //print_vector(global_row_buffer);
-                std::cout << "----------------\n\n";
+                //std::cout << "----------------\n\n";
                 MPI_Send(global_row_buffer.data(), block_size * (grid_col + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
             }
         }
@@ -203,10 +203,10 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
             if (grid_row > 0) {
                 int rec_partner = rank - block_size;
                 std::vector<int> temp(block_size * grid_row);
-                std::cout << "\niteration " << k << " : " << rank << " receives column from " << rec_partner << "\n";
+                //std::cout << "\niteration " << k << " : " << rank << " receives column from " << rec_partner << "\n";
                 MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 //print_vector(temp);
-                std::cout << "----------------\n\n";
+                //std::cout << "----------------\n\n";
                 std::copy(temp.begin(), temp.end(), global_col_buffer.begin());
             }
 
@@ -216,9 +216,9 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
             }
             int partner = rank + block_size;
             if (partner < size) {
-                std::cout << "\niteration " << k << " : " << rank << " sends column to " << partner << "\n";
+                //std::cout << "\niteration " << k << " : " << rank << " sends column to " << partner << "\n";
                 //print_vector(global_col_buffer);
-                std::cout << "----------------\n\n";
+                //std::cout << "----------------\n\n";
                 MPI_Send(global_col_buffer.data(), block_size * (grid_row + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
             }
         }
@@ -228,10 +228,16 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
         // with the potential shorter path col_buffer[i] + row_buffer[j]. 
         // If the new path is shorter, it updates D[i][j].
 
-
-        //...
+        for (int i = 0; i < local_matrix.size(); i++) {
+            for (int j = 0; j < local_matrix[i].size(); j++) {
+                if (local_matrix[i][j] > global_col_buffer[i] + global_row_buffer[j]) {
+                    std::cout << "updated " << i << " " << j << " (" << local_matrix[i][j] << ") from process " << rank << " with " << global_col_buffer[i] << " + " << global_row_buffer[j] << "\n";
+                    local_matrix[i][j] = global_col_buffer[i] + global_row_buffer[j];
+                }
+            }
+        }
         
-        if (rank == 0) {
+        if (false) {
             std::cout << "rank " << rank << " view:" << "\n";
             std::cout << "iteration " << k << ":\n";
             //std::cout << "last_col_owner " << last_col_owner << ":\n";
@@ -305,14 +311,14 @@ int main(int argc, char** argv) {
         std::copy(local_block.begin() + i * block_size, local_block.begin() + (i + 1) * block_size, local_matrix[i].begin());
     }
 
-    /*
+    // Perform the parallel Floyd-Warshall algorithm
+    floyd_all_pairs_parallel(local_matrix, n, grid_comm);
+
+    if (rank == 3) {
         std::cout << "--" << rank << "-- START \n";
         print_matrix(local_matrix);
         std::cout << "\n--" << rank << "-- END \n";
-    */
-
-    // Perform the parallel Floyd-Warshall algorithm
-    floyd_all_pairs_parallel(local_matrix, n, grid_comm);
+    }
 
     // Construct the output file path
     std::filesystem::path output_file_path = std::filesystem::path(input_file_path).parent_path() / "output_matrix.txt";
