@@ -125,7 +125,7 @@ void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const std::str
     }
 }
 
-void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n) {
+void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n, MPI_Comm& comm) {
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -155,7 +155,19 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
         int last_row_owner = (k_grid_row * block_size) + block_size - 1;
         if (int(rank / sqrt_p) < k && k < int(rank / sqrt_p) + block_size + extra_range) {
             int local_row_index = k % block_size;
-            
+
+            //MPI_Cart_shift(comm, 1, -1, &partner, &left);
+            int coords[2];
+            MPI_Cart_coords(comm, rank, 2, coords);
+            coords[1]++;
+            //std::cout << "partner coords! " << coords[0] << " " << coords[1];
+            if (coords[1] < block_size) {
+                int partner;
+                MPI_Cart_rank(comm, coords, &partner);
+                std::cout << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
+                //print_vector(global_col_buffer);
+                std::cout << "----------------\n\n";
+            }
         }
         //MPI_Bcast(global_row_buffer.data(), n, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
         
@@ -283,7 +295,7 @@ int main(int argc, char** argv) {
     */
 
     // Perform the parallel Floyd-Warshall algorithm
-    floyd_all_pairs_parallel(local_matrix, n);
+    floyd_all_pairs_parallel(local_matrix, n, grid_comm);
 
     // Construct the output file path
     std::filesystem::path output_file_path = std::filesystem::path(input_file_path).parent_path() / "output_matrix.txt";
