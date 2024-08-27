@@ -176,7 +176,6 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
             int local_col_index = k % block_size;
             for (int i = 0; i < block_size; i++) {
                 global_col_buffer[(grid_row * block_size) + i] = local_matrix[i][local_col_index];
-                global_col_buffer.shrink_to_fit();
             }
             int partner = rank + block_size;
             if (partner < size) {
@@ -186,6 +185,7 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
                 MPI_Send(global_col_buffer.data(), block_size * (grid_row + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
             }
         }
+        MPI_Bcast(global_col_buffer.data(), n, MPI_INT, last_col_owner, MPI_COMM_WORLD);
         //MPI_Gather(local_buffer.data(), block_size, MPI_INT, global_col_buffer.data(), block_size, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
 
 
@@ -199,7 +199,8 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
 
         //MPI_Bcast(global_col_buffer.data(), n, MPI_INT, 0, MPI_COMM_WORLD);
         
-        if (false) {
+        if (rank == 3) {
+            std::cout << "rank " << rank << " view:" << ":\n";
             std::cout << "iteration " << k << ":\n";
             //std::cout << "last_col_owner " << last_col_owner << ":\n";
             print_vector(global_col_buffer);
