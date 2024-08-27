@@ -20,6 +20,14 @@ void print_matrix(const std::vector<std::vector<int>>& matrix) {
     }
 }
 
+std::vector<int> flatten_matrix(const std::vector<std::vector<int>>& matrix) {
+    std::vector<int> flat_matrix;
+    for (const auto& row : matrix) {
+        flat_matrix.insert(flat_matrix.end(), row.begin(), row.end());
+    }
+    return flat_matrix;
+}
+
 void print_vector(std::vector<int> const& input)
 {
     for (int i = 0; i < input.size(); i++) {
@@ -231,7 +239,7 @@ void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n
         for (int i = 0; i < local_matrix.size(); i++) {
             for (int j = 0; j < local_matrix[i].size(); j++) {
                 if (local_matrix[i][j] > global_col_buffer[i] + global_row_buffer[j]) {
-                    std::cout << "updated " << i << " " << j << " (" << local_matrix[i][j] << ") from process " << rank << " with " << global_col_buffer[i] << " + " << global_row_buffer[j] << "\n";
+                    //std::cout << "updated " << i << " " << j << " (" << local_matrix[i][j] << ") from process " << rank << " with " << global_col_buffer[i] << " + " << global_row_buffer[j] << "\n";
                     local_matrix[i][j] = global_col_buffer[i] + global_row_buffer[j];
                 }
             }
@@ -314,10 +322,57 @@ int main(int argc, char** argv) {
     // Perform the parallel Floyd-Warshall algorithm
     floyd_all_pairs_parallel(local_matrix, n, grid_comm);
 
-    if (rank == 3) {
-        std::cout << "--" << rank << "-- START \n";
-        print_matrix(local_matrix);
-        std::cout << "\n--" << rank << "-- END \n";
+    int grid_col = rank % block_size;
+    int grid_row = int(rank / block_size);
+    int sqrt_p = static_cast<int>(sqrt(size));
+
+    // Print local matrix (for debugging)
+    std::cout << "Process " << rank << " has submatrix:\n";
+    print_matrix(local_matrix);
+
+
+    // Root process will gather the full matrix
+    std::vector<int> full_matrix;
+    if (rank == 0) {
+        full_matrix.resize(4 * 4);
+    }
+
+    // Calculate the displacements and receive counts for gathering
+    std::vector<int> displacements(size, 0);
+    std::vector<int> recvcounts(size, block_size * block_size);
+
+    if (true) {
+        for (int i = 0; i < sqrt_p; ++i) {
+            for (int j = 0; j < sqrt_p; ++j) {
+                int proc_rank = i * sqrt_p + j;
+                displacements[proc_rank] = (i * block_size * n) + (j * block_size);
+            }
+        }
+    }
+
+    // Gather the blocks into the full matrix
+    if (false) {
+        MPI_Gather(flatten_matrix(local_matrix).data(), 4, MPI_INT,
+            full_matrix.data(), 4, MPI_INT,
+            0, MPI_COMM_WORLD);
+    }
+
+    MPI_Gatherv(flatten_matrix(local_matrix).data(), block_size * block_size, MPI_INT,
+        full_matrix.data(), recvcounts.data(), displacements.data(), MPI_INT,
+        0, MPI_COMM_WORLD);
+
+    // Root process prints the full matrix
+    if (rank == 0) {
+        std::cout << "\nReconstructed full matrix:\n";
+        if (true) {
+            for (int i = 0; i < n; ++i) {
+                for (int j = 0; j < n; ++j) {
+                    std::cout << full_matrix[i * n + j] << " ";
+                }
+                std::cout << std::endl;
+            }
+        }
+        //print_vector(full_matrix);
     }
 
     // Construct the output file path
