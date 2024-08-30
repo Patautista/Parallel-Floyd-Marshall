@@ -129,6 +129,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="original.cpp" />
     <ClCompile Include="ParallellFloyd-2DPipeline.cpp" />
   </ItemGroup>
   <ItemGroup>
