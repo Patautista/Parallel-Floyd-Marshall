@@ -33,6 +33,7 @@ public:
         MPI_Finalize();
     }
 
+private:
     void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n, MPI_Comm& comm) {
         int rank, size;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -49,7 +50,7 @@ public:
 
         // This loop iterates through each vertex k, 
         // treating it as an intermediate vertex in potential shortest paths between all pairs of vertices.
-        for (int k = 1; k < n; ++k) {
+        for (int k = 1; k < n; k++) {
 
             // Row Responsibility: owner_row determines which process is responsible for broadcasting a particular row k. 
             // If the current process is responsible, it fills row_buffer with that row.
@@ -133,25 +134,10 @@ public:
             // with the potential shorter path col_buffer[i] + row_buffer[j]. 
             // If the new path is shorter, it updates D[i][j].
 
-            for (int i = 0; i < local_matrix.size(); i++) {
-                for (int j = 0; j < local_matrix[i].size(); j++) {
-                    if (local_matrix[i][j] > global_col_buffer[i] + global_row_buffer[j]) {
-                        //std::cout << "updated " << i << " " << j << " (" << local_matrix[i][j] << ") from process " << rank << " with " << global_col_buffer[i] << " + " << global_row_buffer[j] << "\n";
-                        local_matrix[i][j] = global_col_buffer[i] + global_row_buffer[j];
-                    }
-                }
-            }
-
-            if (false) {
-                std::cout << "rank " << rank << " view:" << "\n";
-                std::cout << "iteration " << k << ":\n";
-                //print_vector(global_row_buffer);
-                //print_vector(global_col_buffer);
-                std::cout << "\n\n";
-            }
+            update_local_matrix(local_matrix, global_row_buffer, global_col_buffer);
         }
     }
-
+public:
     void execute() {
         MPI_Comm grid_comm;
         initialize_grid(grid_comm);
@@ -260,43 +246,6 @@ private:
                 matrix[i].begin());
         }
         return matrix;
-    }
-
-    void broadcast_row(MPI_Comm& comm, std::vector<int>& buffer, int grid_col, int block_size) {
-        if (grid_col > 0) {
-            int coords[2];
-            MPI_Cart_coords(comm, rank, 2, coords);
-            coords[1]--;
-            int rec_partner;
-            MPI_Cart_rank(comm, coords, &rec_partner);
-
-            std::vector<int> temp(block_size * grid_col);
-            MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            std::copy(temp.begin(), temp.end(), buffer.begin());
-        }
-
-        int coords[2];
-        MPI_Cart_coords(comm, rank, 2, coords);
-        coords[1]++;
-        if (coords[1] < block_size) {
-            int partner;
-            MPI_Cart_rank(comm, coords, &partner);
-            MPI_Send(buffer.data(), block_size * (grid_col + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
-        }
-    }
-
-    void broadcast_column(MPI_Comm& comm, std::vector<int>& buffer, int grid_row, int block_size) {
-        if (grid_row > 0) {
-            int rec_partner = rank - block_size;
-            std::vector<int> temp(block_size * grid_row);
-            MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            std::copy(temp.begin(), temp.end(), buffer.begin());
-        }
-
-        int partner = rank + block_size;
-        if (partner < size) {
-            MPI_Send(buffer.data(), block_size * (grid_row + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
-        }
     }
 
     void update_local_matrix(std::vector<std::vector<int>>& local_matrix,
