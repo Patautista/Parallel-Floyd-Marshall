@@ -18,7 +18,6 @@ public:
         MPI_Init(&argc, &argv);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
-
         if (argc < 2) {
             if (rank == MPI_ROOT) {
                 std::cerr << "Usage: " << argv[0] << " <input_matrix_file_path>" << std::endl;
@@ -35,19 +34,19 @@ public:
     }
 
 private:
+    int m_block_size;
     void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n, MPI_Comm& comm) {
         int rank, size;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
 
         int sqrt_p = static_cast<int>(sqrt(size));
-        int block_size = n / sqrt_p;
 
         std::vector<int> global_row_buffer(n);
         std::vector<int> global_col_buffer(n);
 
         int grid_col = rank % sqrt_p;
-        int grid_row = int(rank / block_size);
+        int grid_row = int(rank / m_block_size);
 
         // This loop iterates through each vertex k, 
         // treating it as an intermediate vertex in potential shortest paths between all pairs of vertices.
@@ -58,12 +57,14 @@ private:
 
             // adds extra range for last row
             int extra_range = (grid_row == sqrt_p - 1 ? 1 : 0);
-            int k_grid_row = int(k / block_size);
+            int k_grid_row = int(k / m_block_size);
             int last_row_owner = (k_grid_row * sqrt_p) + sqrt_p - 1;
-            if (int(rank / sqrt_p) < k && k < int(rank / sqrt_p) + block_size + extra_range) {
-                int local_row_index = k % block_size;
-                for (int i = 0; i < block_size; i++) {
-                    global_row_buffer[(grid_col * block_size) + i] = local_matrix[local_row_index][i];
+
+            if (int(rank / sqrt_p) < k && k < int(rank / sqrt_p) + m_block_size + extra_range) {
+                int local_row_index = k % m_block_size;
+
+                for (int i = 0; i < m_block_size; i++) {
+                    global_row_buffer[(grid_col * m_block_size) + i] = local_matrix[local_row_index][i];
                 }
 
                 if (grid_col > 0) {
@@ -73,7 +74,7 @@ private:
                     int rec_partner;
                     MPI_Cart_rank(comm, coords, &rec_partner);
 
-                    std::vector<int> temp(block_size * grid_col);
+                    std::vector<int> temp(m_block_size * grid_col);
                     //std::cout << "\niteration " << k << " : " << rank << " receives row from " << rec_partner << "\n";
                     MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     //print_vector(temp);
@@ -85,13 +86,13 @@ private:
                 MPI_Cart_coords(comm, rank, 2, coords);
                 coords[1]++;
                 //std::cout << "partner coords! " << coords[0] << " " << coords[1];
-                if (grid_row + 1 < sqrt_p) {
+                if (grid_col + 1 < sqrt_p) {
                     int partner;
                     MPI_Cart_rank(comm, coords, &partner);
                     //std::cout << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
                     //print_vector(global_row_buffer);
                     //std::cout << "----------------\n\n";
-                    MPI_Send(global_row_buffer.data(), block_size * (grid_col + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
+                    MPI_Send(global_row_buffer.data(), m_block_size * (grid_col + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
                 }
             }
 
@@ -103,13 +104,13 @@ private:
             // adds extra range for last column
             extra_range = (grid_col == sqrt_p - 1 ? 1 : 0);
             // sets column broadcaster index
-            int last_col_owner = size - sqrt_p + int(k / block_size);
+            int last_col_owner = size - sqrt_p + int(k / m_block_size);
             // is column owner
-            if (((rank % sqrt_p) < k && (k < rank % sqrt_p + block_size) + extra_range)) {
+            if (((rank % sqrt_p) < k && (k < rank % sqrt_p + m_block_size) + extra_range)) {
 
                 if (grid_row > 0) {
-                    int rec_partner = rank - block_size;
-                    std::vector<int> temp(block_size * grid_row);
+                    int rec_partner = rank - m_block_size;
+                    std::vector<int> temp(m_block_size * grid_row);
                     //std::cout << "\niteration " << k << " : " << rank << " receives column from " << rec_partner << "\n";
                     MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     //print_vector(temp);
@@ -117,16 +118,16 @@ private:
                     std::copy(temp.begin(), temp.end(), global_col_buffer.begin());
                 }
 
-                int local_col_index = k % block_size;
-                for (int i = 0; i < block_size; i++) {
-                    global_col_buffer[(grid_row * block_size) + i] = local_matrix[i][local_col_index];
+                int local_col_index = k % m_block_size;
+                for (int i = 0; i < m_block_size; i++) {
+                    global_col_buffer[(grid_row * m_block_size) + i] = local_matrix[i][local_col_index];
                 }
-                int partner = rank + block_size;
+                int partner = rank + m_block_size;
                 if (partner < size) {
                     //std::cout << "\niteration " << k << " : " << rank << " sends column to " << partner << "\n";
                     //print_vector(global_col_buffer);
                     //std::cout << "----------------\n\n";
-                    MPI_Send(global_col_buffer.data(), block_size * (grid_row + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
+                    MPI_Send(global_col_buffer.data(), m_block_size * (grid_row + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
                 }
             }
             MPI_Bcast(global_col_buffer.data(), n, MPI_INT, last_col_owner, MPI_COMM_WORLD);
@@ -138,6 +139,51 @@ private:
             update_local_matrix(local_matrix, global_row_buffer, global_col_buffer);
         }
     }
+    int calculate_matrix_dimension(const std::string& file_path) {
+        std::ifstream file(file_path);
+        if (!file.is_open()) {
+            std::cerr << "Unable to open file." << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+
+        std::string line;
+        if (std::getline(file, line)) {
+            std::istringstream iss(line);
+            int count = 0;
+            int value;
+            while (iss >> value) {
+                count++;
+            }
+            return count;
+        }
+
+        std::cerr << "Error reading file." << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, 1);
+        return -1; // In case of an error
+    }
+    void read_local_block(std::vector<std::vector<int>>& local_matrix) {
+        std::ifstream file(input_file_path);
+        if (!file.is_open()) {
+            std::cerr << "Unable to open file." << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+
+        int sqrt_p = std::sqrt(size);
+        int row_block = rank / sqrt_p;
+        int col_block = rank % sqrt_p;
+        int start_row = row_block * m_block_size;
+        int start_col = col_block * m_block_size;
+
+        int value;
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                file >> value;
+                if (i >= start_row && i < start_row + m_block_size && j >= start_col && j < start_col + m_block_size) {
+                    local_matrix[i - start_row][j - start_col] = value;
+                }
+            }
+        }
+    }
 public:
     void execute() {
         MPI_Comm grid_comm;
@@ -145,39 +191,38 @@ public:
 
         std::vector<std::vector<int>> matrix;
         if (rank == MPI_ROOT) {
-            read_matrix_from_file(matrix, input_file_path);
-            n = matrix.size();
+            n = calculate_matrix_dimension(input_file_path);
         }
 
         MPI_Bcast(&n, 1, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
-        int block_size = n / dims[0];
+        m_block_size = n / dims[0];
 
-        std::vector<int> full_flat_matrix;
+        std::vector<int> full_flat_matrix(m_block_size * m_block_size);
         if (rank == MPI_ROOT) {
-            full_flat_matrix = create_2D_partition(matrix, block_size);
+            //full_flat_matrix = create_2D_partition(matrix, m_block_size);
         }
 
-        std::vector<int> local_block(block_size * block_size);
-        MPI_Scatter(full_flat_matrix.data(), block_size * block_size, MPI_INT,
-            local_block.data(), block_size * block_size, MPI_INT,
+        std::vector<int> local_block(m_block_size * m_block_size);
+        MPI_Scatter(full_flat_matrix.data(), m_block_size * m_block_size, MPI_INT,
+            local_block.data(), m_block_size * m_block_size, MPI_INT,
             MPI_ROOT, MPI_COMM_WORLD);
 
-        std::vector<std::vector<int>> local_matrix = reconstruct_matrix(local_block, block_size);
+        std::vector<std::vector<int>> local_matrix = reconstruct_matrix(local_block, m_block_size);
 
-        //std::cout << "Process " << rank << " has submatrix:\n";
-        //print_matrix(local_matrix);
+        std::cout << "Process " << rank << " has submatrix:\n";
+        print_matrix(local_matrix);
 
         floyd_all_pairs_parallel(local_matrix, n, grid_comm);
 
         if (rank == MPI_ROOT) {
             std::vector<int> full_matrix(n * n);
-            gather_matrix(local_matrix, full_matrix, block_size);
+            gather_matrix(local_matrix, full_matrix, m_block_size);
             print_full_matrix(full_matrix, n);
             write_matrix_to_file(full_matrix, n);
         }
         else {
             std::vector<int> full_matrix;
-            gather_matrix(local_matrix, full_matrix, block_size);
+            gather_matrix(local_matrix, full_matrix, m_block_size);
         }
 
         MPI_Comm_free(&grid_comm);
