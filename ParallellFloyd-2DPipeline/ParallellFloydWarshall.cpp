@@ -59,7 +59,7 @@ private:
             // adds extra range for last row
             int extra_range = (grid_row == sqrt_p - 1 ? 1 : 0);
             int k_grid_row = int(k / block_size);
-            int last_row_owner = (k_grid_row * block_size) + block_size - 1;
+            int last_row_owner = (k_grid_row * sqrt_p) + sqrt_p - 1;
             if (int(rank / sqrt_p) < k && k < int(rank / sqrt_p) + block_size + extra_range) {
                 int local_row_index = k % block_size;
                 for (int i = 0; i < block_size; i++) {
@@ -85,7 +85,7 @@ private:
                 MPI_Cart_coords(comm, rank, 2, coords);
                 coords[1]++;
                 //std::cout << "partner coords! " << coords[0] << " " << coords[1];
-                if (coords[1] < block_size) {
+                if (grid_row + 1 < sqrt_p) {
                     int partner;
                     MPI_Cart_rank(comm, coords, &partner);
                     //std::cout << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
@@ -103,7 +103,7 @@ private:
             // adds extra range for last column
             extra_range = (grid_col == sqrt_p - 1 ? 1 : 0);
             // sets column broadcaster index
-            int last_col_owner = size - block_size + int(k / block_size);
+            int last_col_owner = size - sqrt_p + int(k / block_size);
             // is column owner
             if (((rank % sqrt_p) < k && (k < rank % sqrt_p + block_size) + extra_range)) {
 
