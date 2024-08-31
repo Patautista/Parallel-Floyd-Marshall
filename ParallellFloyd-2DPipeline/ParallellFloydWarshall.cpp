@@ -55,12 +55,10 @@ private:
             // Row Responsibility: owner_row determines which process is responsible for broadcasting a particular row k. 
             // If the current process is responsible, it fills row_buffer with that row.
 
-            // adds extra range for last row
-            int extra_range = (grid_row == sqrt_p - 1 ? 1 : 0);
             int k_grid_row = int(k / m_block_size);
             int last_row_owner = (k_grid_row * sqrt_p) + sqrt_p - 1;
 
-            if (int(rank / sqrt_p) < k && k < int(rank / sqrt_p) + m_block_size + extra_range) {
+            if (should_send_row(k, sqrt_p, grid_row)) {
                 int local_row_index = k % m_block_size;
 
                 for (int i = 0; i < m_block_size; i++) {
@@ -102,11 +100,11 @@ private:
             // If the current process is responsible, it fills col_buffer with that column.
 
             // adds extra range for last column
-            extra_range = (grid_col == sqrt_p - 1 ? 1 : 0);
+            
             // sets column broadcaster index
             int last_col_owner = size - sqrt_p + int(k / m_block_size);
-            // is column owner
-            if (((rank % sqrt_p) < k && (k < rank % sqrt_p + m_block_size) + extra_range)) {
+
+            if (should_send_column(k, sqrt_p, grid_col, rank)) {
 
                 if (grid_row > 0) {
                     int rec_partner = rank - m_block_size;
@@ -184,6 +182,14 @@ private:
             }
         }
     }
+    bool should_send_row(int& k, int& sqrt_p, int& grid_row) {
+        int extra_range = (grid_row == sqrt_p - 1 ? 1 : 0);
+        return ((rank % sqrt_p) < k && (k < rank % sqrt_p + m_block_size) + extra_range);
+    }
+    bool should_send_column(int& k, int& sqrt_p, int& grid_col, int& rank) {
+        int extra_range = (grid_col == sqrt_p - 1 ? 1 : 0);
+        return ((rank % sqrt_p) < k && (k < rank % sqrt_p + m_block_size) + extra_range);
+    }
 public:
     void execute() {
         MPI_Comm grid_comm;
@@ -197,17 +203,8 @@ public:
         MPI_Bcast(&n, 1, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
         m_block_size = n / dims[0];
 
-        std::vector<int> full_flat_matrix(m_block_size * m_block_size);
-        if (rank == MPI_ROOT) {
-            //full_flat_matrix = create_2D_partition(matrix, m_block_size);
-        }
-
-        std::vector<int> local_block(m_block_size * m_block_size);
-        MPI_Scatter(full_flat_matrix.data(), m_block_size * m_block_size, MPI_INT,
-            local_block.data(), m_block_size * m_block_size, MPI_INT,
-            MPI_ROOT, MPI_COMM_WORLD);
-
-        std::vector<std::vector<int>> local_matrix = reconstruct_matrix(local_block, m_block_size);
+        std::vector<std::vector<int>> local_matrix(m_block_size, std::vector<int>(m_block_size));
+        read_local_block(local_matrix);
 
         std::cout << "Process " << rank << " has submatrix:\n";
         print_matrix(local_matrix);
