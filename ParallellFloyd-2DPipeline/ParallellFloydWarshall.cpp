@@ -206,20 +206,21 @@ public:
         std::vector<std::vector<int>> local_matrix(m_block_size, std::vector<int>(m_block_size));
         read_local_block(local_matrix);
 
-        std::cout << "Process " << rank << " has submatrix:\n";
-        print_matrix(local_matrix);
+        if (rank == 1) {
+            std::cout << "Process " << rank << " has submatrix:\n";
+            print_matrix(local_matrix);
+        }
 
         floyd_all_pairs_parallel(local_matrix, n, grid_comm);
 
+        std::vector<int> full_matrix;
         if (rank == MPI_ROOT) {
-            std::vector<int> full_matrix(n * n);
-            gather_matrix(local_matrix, full_matrix, m_block_size);
+            full_matrix.resize(n * n);
+        }
+        gather_matrix(local_matrix, full_matrix, m_block_size);
+        if (rank == MPI_ROOT) {
             print_full_matrix(full_matrix, n);
             write_matrix_to_file(full_matrix, n);
-        }
-        else {
-            std::vector<int> full_matrix;
-            gather_matrix(local_matrix, full_matrix, m_block_size);
         }
 
         MPI_Comm_free(&grid_comm);

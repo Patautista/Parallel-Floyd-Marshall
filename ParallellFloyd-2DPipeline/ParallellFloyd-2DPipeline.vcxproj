@@ -130,7 +130,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="FloydWarshall.cpp" />
-    <ClCompile Include="ParallellFloyd-2DPipeline.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="ParallellFloydWarshall.cpp" />
   </ItemGroup>
   <ItemGroup>

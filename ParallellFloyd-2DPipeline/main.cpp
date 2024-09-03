@@ -7,7 +7,7 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
-#include "ParallelFloydWarshall.cpp"
+#include "ParallellFloydWarshall.cpp"
 
 int main(int argc, char** argv) {
     ParallelFloydWarshall floyd(argc, argv);
