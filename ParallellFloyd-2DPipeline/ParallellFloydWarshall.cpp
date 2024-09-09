@@ -8,6 +8,7 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
+#include "Logger.h"
 
 #define INF INT_MAX
 #define MPI_ROOT 0
@@ -15,6 +16,8 @@
 class ParallelFloydWarshall {
 public:
     ParallelFloydWarshall(int argc, char** argv) {
+        m_logger.enableFileLogging("app.log");
+        m_logger.setLogLevel(LogLevel::DEBUG);
         MPI_Init(&argc, &argv);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -35,8 +38,10 @@ public:
 
 private:
     int m_block_size;
+    Logger& m_logger = Logger::getInstance();
+    std::stringstream m_log_stream;
     void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n, MPI_Comm& comm) {
-        int rank, size;
+        
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
 
@@ -73,21 +78,24 @@ private:
                     MPI_Cart_rank(comm, coords, &rec_partner);
 
                     std::vector<int> temp(m_block_size * grid_col);
-                    //std::cout << "\niteration " << k << " : " << rank << " receives row from " << rec_partner << "\n";
+
+                    m_log_stream << "\niteration " << k << " : " << rank << " receives row from " << rec_partner << "\n";
+                    m_logger.debug(m_log_stream.str());
+                    m_log_stream.flush();
+
                     MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    //print_vector(temp);
-                    //std::cout << "----------------\n\n";
                     std::copy(temp.begin(), temp.end(), global_row_buffer.begin());
                 }
 
                 int coords[2];
                 MPI_Cart_coords(comm, rank, 2, coords);
                 coords[1]++;
-                //std::cout << "partner coords! " << coords[0] << " " << coords[1];
                 if (grid_col + 1 < sqrt_p) {
                     int partner;
                     MPI_Cart_rank(comm, coords, &partner);
-                    //std::cout << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
+                    m_log_stream << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
+                    m_logger.debug(m_log_stream.str());
+                    m_log_stream.flush();
                     //print_vector(global_row_buffer);
                     //std::cout << "----------------\n\n";
                     MPI_Send(global_row_buffer.data(), m_block_size * (grid_col + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
@@ -109,7 +117,9 @@ private:
                 if (grid_row > 0) {
                     int rec_partner = rank - m_block_size;
                     std::vector<int> temp(m_block_size * grid_row);
-                    //std::cout << "\niteration " << k << " : " << rank << " receives column from " << rec_partner << "\n";
+                    m_log_stream << "\niteration " << k << " : " << rank << " receives column from " << rec_partner << "\n";
+                    m_logger.debug(m_log_stream.str());
+                    m_log_stream.flush();
                     MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     //print_vector(temp);
                     //std::cout << "----------------\n\n";
@@ -122,9 +132,9 @@ private:
                 }
                 int partner = rank + m_block_size;
                 if (partner < size) {
-                    //std::cout << "\niteration " << k << " : " << rank << " sends column to " << partner << "\n";
-                    //print_vector(global_col_buffer);
-                    //std::cout << "----------------\n\n";
+                    m_log_stream << "\niteration " << k << " : " << rank << " sends column to " << partner << "\n";
+                    m_logger.debug(m_log_stream.str());
+                    m_log_stream.flush();
                     MPI_Send(global_col_buffer.data(), m_block_size * (grid_row + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
                 }
             }
@@ -184,7 +194,7 @@ private:
     }
     bool should_send_row(int& k, int& sqrt_p, int& grid_row) {
         int extra_range = (grid_row == sqrt_p - 1 ? 1 : 0);
-        return ((rank % sqrt_p) < k && (k < rank % sqrt_p + m_block_size) + extra_range);
+        return (int(rank / sqrt_p) < k && k < int(rank / sqrt_p) + m_block_size + extra_range);
     }
     bool should_send_column(int& k, int& sqrt_p, int& grid_col, int& rank) {
         int extra_range = (grid_col == sqrt_p - 1 ? 1 : 0);
@@ -299,6 +309,9 @@ private:
             for (int j = 0; j < local_matrix[i].size(); j++) {
                 if (local_matrix[i][j] > global_col_buffer[i] + global_row_buffer[j]) {
                     local_matrix[i][j] = global_col_buffer[i] + global_row_buffer[j];
+                    m_log_stream << "\nupdated element " << i << "," << j << " to " << global_col_buffer[i] << " + " << global_row_buffer[j] << " [" << global_col_buffer[i] + global_row_buffer[j] << "]\n";
+                    m_logger.debug(m_log_stream.str());
+                    m_log_stream.flush();
                 }
             }
         }
