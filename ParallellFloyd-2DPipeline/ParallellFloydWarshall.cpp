@@ -144,7 +144,13 @@ private:
             // with the potential shorter path col_buffer[i] + row_buffer[j]. 
             // If the new path is shorter, it updates D[i][j].
 
-            update_local_matrix(local_matrix, global_row_buffer, global_col_buffer);
+            if (rank == 2) {
+                std::cout << "iteration " << k << " process " << rank << " has: \n";
+                print_matrix(local_matrix);
+            }
+            
+            update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, grid_row, grid_col);
+
         }
     }
     int calculate_matrix_dimension(const std::string& file_path) {
@@ -216,12 +222,12 @@ public:
         std::vector<std::vector<int>> local_matrix(m_block_size, std::vector<int>(m_block_size));
         read_local_block(local_matrix);
 
-        if (rank == 1) {
-            std::cout << "Process " << rank << " has submatrix:\n";
+        floyd_all_pairs_parallel(local_matrix, n, grid_comm);
+
+        if (true) {
+            std::cout << "Process " << rank << " has submatrix after:\n";
             print_matrix(local_matrix);
         }
-
-        floyd_all_pairs_parallel(local_matrix, n, grid_comm);
 
         std::vector<int> full_matrix;
         if (rank == MPI_ROOT) {
@@ -249,12 +255,14 @@ private:
     }
 
     void print_matrix(const std::vector<std::vector<int>>& matrix) {
+        std::stringstream stream;
         for (const auto& row : matrix) {
             for (const auto& elem : row) {
-                std::cout << elem << " ";
+                stream << elem << " ";
             }
-            std::cout << std::endl;
+            stream << std::endl;
         }
+        std::cout << stream.str();
     }
 
     void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const std::string& filename) {
@@ -304,12 +312,13 @@ private:
 
     void update_local_matrix(std::vector<std::vector<int>>& local_matrix,
         const std::vector<int>& global_row_buffer,
-        const std::vector<int>& global_col_buffer) {
+        const std::vector<int>& global_col_buffer, 
+        int&grid_row, int& grid_col) {
         for (int i = 0; i < local_matrix.size(); i++) {
             for (int j = 0; j < local_matrix[i].size(); j++) {
-                if (local_matrix[i][j] > global_col_buffer[i] + global_row_buffer[j]) {
-                    local_matrix[i][j] = global_col_buffer[i] + global_row_buffer[j];
-                    m_log_stream << "\nupdated element " << i << "," << j << " to " << global_col_buffer[i] << " + " << global_row_buffer[j] << " [" << global_col_buffer[i] + global_row_buffer[j] << "]\n";
+                if (local_matrix[i][j] > global_col_buffer[j + grid_col * m_block_size] + global_row_buffer[i + grid_row * m_block_size]) {
+                    local_matrix[i][j] = global_col_buffer[j + grid_col * m_block_size] + global_row_buffer[i * grid_row];
+                    m_log_stream << "\nprocess " << rank << " updated element " << i << "," << j << " to " << global_col_buffer[j + grid_col * m_block_size] << " + " << global_row_buffer[i + grid_row * m_block_size] << " [" << global_col_buffer[j + grid_col * m_block_size] + global_row_buffer[i + grid_row * m_block_size] << "]\n";
                     m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
                 }
