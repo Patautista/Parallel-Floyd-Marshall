@@ -233,7 +233,7 @@ public:
         if (rank == MPI_ROOT) {
             full_matrix.resize(n * n);
         }
-        gather_matrix(local_matrix, full_matrix, m_block_size);
+        gather_matrix(local_matrix, full_matrix, m_block_size, n);
         if (rank == MPI_ROOT) {
             print_full_matrix(full_matrix, n);
             write_matrix_to_file(full_matrix, n);
@@ -263,6 +263,14 @@ private:
             stream << std::endl;
         }
         std::cout << stream.str();
+    }
+
+    void print_vector(std::vector<int> const& input)
+    {
+        for (int i = 0; i < input.size(); i++) {
+            std::cout << input.at(i) << ' ';
+        }
+        std::cout << "\n";
     }
 
     void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const std::string& filename) {
@@ -326,28 +334,23 @@ private:
         }
     }
 
-    void gather_matrix(const std::vector<std::vector<int>>& local_matrix, std::vector<int>& full_matrix, int block_size) {
+    void gather_matrix(const std::vector<std::vector<int>>& local_matrix, std::vector<int>& full_matrix, int block_size, int n) {
         std::vector<int> displacements(size, 0);
         std::vector<int> recvcounts(size, block_size * block_size);
-        int sqrt_p = static_cast<int>(sqrt(size));
+        int sqrt_p = static_cast<int>(sqrt(size));  // Assuming size is a perfect square
 
-        for (int i = 0; i < sqrt_p; ++i) {
-            for (int j = 0; j < sqrt_p; ++j) {
-                int proc_rank = i * sqrt_p + j;
-                displacements[proc_rank] = (i * block_size * n) + (j * block_size);
-            }
-        }
-
+        // Flatten the local submatrix into a 1D vector
         std::vector<int> flat_local_matrix(block_size * block_size);
         for (int i = 0; i < block_size; ++i) {
             std::copy(local_matrix[i].begin(), local_matrix[i].end(), flat_local_matrix.begin() + i * block_size);
         }
 
-        MPI_Gatherv(flat_local_matrix.data(), block_size * block_size, MPI_INT,
-            full_matrix.data(), recvcounts.data(), displacements.data(),
-            MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
-
+        // Gather the submatrices from all processes into the full matrix
+        MPI_Gather(flat_local_matrix.data(), block_size * block_size, MPI_INT,
+            rank == MPI_ROOT ? &full_matrix[rank * n] : nullptr,
+            block_size * block_size, MPI_INT, 0, MPI_COMM_WORLD);
     }
+
 
     void print_full_matrix(const std::vector<int>& matrix, int n) {
         for (int i = 0; i < n; i++) {
