@@ -9,6 +9,7 @@
 #include <sstream>
 #include <filesystem>
 #include "Logger.h"
+#include "Matrix.h"
 
 #define INF INT_MAX
 #define MPI_ROOT 0
@@ -216,10 +217,10 @@ public:
         if (rank == MPI_ROOT) {
             full_matrix.resize(n * n);
         }
-        gather_matrix(local_matrix, full_matrix, m_block_size, n);
+        gather_matrix(local_matrix, full_matrix, m_block_size, n, sqrt_p);
         if (rank == MPI_ROOT) {
-            //print_flat_matrix(full_matrix, n, m_block_size, sqrt_p);
-            write_flat_matrix_to_file(full_matrix, n, m_block_size, sqrt_p, m_input_file_path + "output_matrix.txt");
+            print_flat_matrix(full_matrix, n, m_block_size, sqrt_p);
+            write_flat_matrix_to_file(full_matrix, n, m_block_size, sqrt_p, m_input_file_path + "_result.txt");
         }
 
         MPI_Comm_free(&grid_comm);
@@ -268,10 +269,9 @@ private:
         }
     }
 
-    void gather_matrix(const std::vector<std::vector<int>>& local_matrix, std::vector<int>& full_matrix, int block_size, int n) {
+    void gather_matrix(const std::vector<std::vector<int>>& local_matrix, std::vector<int>& full_matrix, int block_size, int n, int sqrt_p) {
         std::vector<int> displacements(size, 0);
         std::vector<int> recvcounts(size, block_size * block_size);
-        int sqrt_p = static_cast<int>(sqrt(size));  // Assuming size is a perfect square
 
         // Flatten the local submatrix into a 1D vector
         std::vector<int> flat_local_matrix(block_size * block_size);
@@ -282,7 +282,7 @@ private:
         // Gather the submatrices from all processes into the full matrix
         MPI_Gather(flat_local_matrix.data(), block_size * block_size, MPI_INT,
             rank == MPI_ROOT ? &full_matrix[rank * n] : nullptr,
-            block_size * block_size, MPI_INT, 0, MPI_COMM_WORLD);
+            block_size * block_size, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
     }
 
     void print_element(int value) {
@@ -304,10 +304,16 @@ private:
     }
 
     void print_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p) {
-        loop_flat_matrix(matrix, n, block_size, sqrt_p, [this](int value) {
-            print_element(value); // Now this will work since 'this' is captured
+        int counter = 0;
+        loop_flat_matrix(matrix, n, block_size, sqrt_p, [&counter,&n, this](int value) {
+            print_element(value); // Print the current element
+            counter++; // Increment the counter
+
+            if (counter % n == 0) { // If we've printed 'n' elements, it's time for a newline
+                std::cout << std::endl;
+            }
             });
-        std::cout << std::endl; // Add a final newline after the matrix is printed
+        std::cout << std::endl;
     }
     void write_flat_matrix_to_file(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, const std::string& file_path) {
         std::ofstream file(file_path);
@@ -316,8 +322,15 @@ private:
             return;
         }
 
-        loop_flat_matrix(matrix, n, block_size, sqrt_p, [this, &file](int value) {
-            write_element_to_file(value, file); // Capture 'this' and 'file'
+        int counter = 0;
+
+        loop_flat_matrix(matrix, n, block_size, sqrt_p, [&counter, &n, this, &file](int value) {
+            write_element_to_file(value, file);
+            counter++; // Increment the counter
+
+            if (counter % n == 0) { // If we've printed 'n' elements, it's time for a newline
+                file << std::endl;
+            }
             });
 
         file.close();
@@ -328,12 +341,10 @@ private:
             for (int row_in_block = 0; row_in_block < block_size; ++row_in_block) {
                 for (int block_col = 0; block_col < sqrt_p; ++block_col) {
                     for (int col_in_block = 0; col_in_block < block_size; ++col_in_block) {
-                        // Get the flattened index using the helper function
                         int flat_idx = (block_row * sqrt_p + block_col) * block_size * block_size
                             + row_in_block * block_size + col_in_block;
                         int value = matrix[flat_idx];
 
-                        // Call the passed function on the current matrix element
                         func(value);
                     }
                 }

@@ -1,16 +1,14 @@
 #pragma once
-#include "ParallellFloydWarshall.h"
 #include <mpi.h>
 #include <iostream>
 #include <vector>
 #include <cstdlib>
-#include <ctime>
 #include <climits>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
 
-void print_matrix(const std::vector<std::vector<int>>& matrix) {
+inline void print_matrix(const std::vector<std::vector<int>>& matrix) {
     std::stringstream stream;
     for (const auto& row : matrix) {
         for (const auto& elem : row) {
@@ -21,7 +19,7 @@ void print_matrix(const std::vector<std::vector<int>>& matrix) {
     std::cout << stream.str();
 }
 
-void print_vector(std::vector<int> const& input)
+inline void print_vector(std::vector<int> const& input)
 {
     for (int i = 0; i < input.size(); i++) {
         std::cout << input.at(i) << ' ';
@@ -29,7 +27,7 @@ void print_vector(std::vector<int> const& input)
     std::cout << "\n";
 }
 
-void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const std::string& filename) {
+inline void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const std::string& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Unable to open file for reading." << std::endl;
