@@ -17,7 +17,7 @@ class ParallelFloydWarshall {
 public:
     ParallelFloydWarshall(int argc, char** argv) {
         m_logger.enableFileLogging("app.log");
-        m_logger.setLogLevel(LogLevel::DEBUG);
+        m_logger.setLogLevel(LogLevel::INFO);
         MPI_Init(&argc, &argv);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -143,14 +143,8 @@ private:
             // Each process updates its block of the matrix D by comparing the current distance D[i][j]
             // with the potential shorter path col_buffer[i] + row_buffer[j]. 
             // If the new path is shorter, it updates D[i][j].
-
-            if (rank == 2) {
-                std::cout << "iteration " << k << " process " << rank << " has: \n";
-                print_matrix(local_matrix);
-            }
             
             update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, grid_row, grid_col);
-
         }
     }
     int calculate_matrix_dimension(const std::string& file_path) {
@@ -175,6 +169,7 @@ private:
         MPI_Abort(MPI_COMM_WORLD, 1);
         return -1; // In case of an error
     }
+
     void read_local_block(std::vector<std::vector<int>>& local_matrix) {
         std::ifstream file(input_file_path);
         if (!file.is_open()) {
@@ -224,19 +219,15 @@ public:
 
         floyd_all_pairs_parallel(local_matrix, n, grid_comm);
 
-        if (true) {
-            std::cout << "Process " << rank << " has submatrix after:\n";
-            print_matrix(local_matrix);
-        }
-
         std::vector<int> full_matrix;
         if (rank == MPI_ROOT) {
             full_matrix.resize(n * n);
         }
+        int sqrt_p = static_cast<int>(sqrt(size));
         gather_matrix(local_matrix, full_matrix, m_block_size, n);
         if (rank == MPI_ROOT) {
-            print_full_matrix(full_matrix, n);
-            write_matrix_to_file(full_matrix, n);
+            print_full_matrix(full_matrix, n, m_block_size, sqrt_p);
+            write_matrix_to_file(full_matrix, n, m_block_size, sqrt_p, "./");
         }
 
         MPI_Comm_free(&grid_comm);
@@ -308,15 +299,6 @@ private:
         return flat_matrix;
     }
 
-    std::vector<std::vector<int>> reconstruct_matrix(const std::vector<int>& flat_matrix, int block_size) {
-        std::vector<std::vector<int>> matrix(block_size, std::vector<int>(block_size));
-        for (int i = 0; i < block_size; ++i) {
-            std::copy(flat_matrix.begin() + i * block_size,
-                flat_matrix.begin() + (i + 1) * block_size,
-                matrix[i].begin());
-        }
-        return matrix;
-    }
 
     void update_local_matrix(std::vector<std::vector<int>>& local_matrix,
         const std::vector<int>& global_row_buffer,
@@ -351,39 +333,59 @@ private:
             block_size * block_size, MPI_INT, 0, MPI_COMM_WORLD);
     }
 
-
-    void print_full_matrix(const std::vector<int>& matrix, int n) {
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                if (matrix[i * n + j] == INF) {
-                    std::cout << "INF ";
-                }
-                else {
-                    std::cout << matrix[i * n + j] << " ";
-                }
-            }
-            std::cout << std::endl;
+    void print_element(int value) {
+        if (value == INF) {
+            std::cout << "INF ";
+        }
+        else {
+            std::cout << value << " ";
         }
     }
 
-    void write_matrix_to_file(const std::vector<int>& matrix, int n) {
-        std::ofstream out_file(input_file_path + "_result.txt");
-        if (!out_file.is_open()) {
-            std::cerr << "Unable to open file for writing." << std::endl;
+    void write_element_to_file(int value, std::ofstream& file) {
+        if (value == INF) {
+            file << "INF ";
+        }
+        else {
+            file << value << " ";
+        }
+    }
+
+    void print_full_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p) {
+        loop_flat_matrix(matrix, n, block_size, sqrt_p, [this](int value) {
+            print_element(value); // Now this will work since 'this' is captured
+            });
+        std::cout << std::endl; // Add a final newline after the matrix is printed
+    }
+    void write_matrix_to_file(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, const std::string& file_path) {
+        std::ofstream file(file_path);
+        if (!file.is_open()) {
+            std::cerr << "Failed to open file for writing!" << std::endl;
             return;
         }
 
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                if (matrix[i * n + j] == INF) {
-                    out_file << "INF ";
-                }
-                else {
-                    out_file << matrix[i * n + j] << " ";
+        loop_flat_matrix(matrix, n, block_size, sqrt_p, [this, &file](int value) {
+            write_element_to_file(value, file); // Capture 'this' and 'file'
+            });
+
+        file.close();
+    }
+    template <typename Func>
+    void loop_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, Func func) {
+        for (int block_row = 0; block_row < sqrt_p; ++block_row) {
+            for (int row_in_block = 0; row_in_block < block_size; ++row_in_block) {
+                for (int block_col = 0; block_col < sqrt_p; ++block_col) {
+                    for (int col_in_block = 0; col_in_block < block_size; ++col_in_block) {
+                        // Get the flattened index using the helper function
+                        int flat_idx = (block_row * sqrt_p + block_col) * block_size * block_size
+                            + row_in_block * block_size + col_in_block;
+                        int value = matrix[flat_idx];
+
+                        // Call the passed function on the current matrix element
+                        func(value);
+                    }
                 }
             }
-            out_file << std::endl;
         }
-        out_file.close();
     }
 };
