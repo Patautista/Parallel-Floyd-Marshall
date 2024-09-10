@@ -1,0 +1,7 @@
+{
+  "output": "output_matrix.txt",
+  "input": "",
+  "processors": 4,
+  "log_level": "INFO",
+  "log_output": "app.log"
+}

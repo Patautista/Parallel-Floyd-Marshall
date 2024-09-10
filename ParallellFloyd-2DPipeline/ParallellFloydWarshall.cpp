@@ -29,7 +29,7 @@ public:
             exit(1);
         }
 
-        input_file_path = argv[1];
+        m_input_file_path = argv[1];
     }
 
     ~ParallelFloydWarshall() {
@@ -40,18 +40,17 @@ private:
     int m_block_size;
     Logger& m_logger = Logger::getInstance();
     std::stringstream m_log_stream;
-    void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n, MPI_Comm& comm) {
+
+    void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n, MPI_Comm& comm, int sqrt_p) {
         
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-        int sqrt_p = static_cast<int>(sqrt(size));
-
         std::vector<int> global_row_buffer(n);
         std::vector<int> global_col_buffer(n);
 
-        int grid_col = rank % sqrt_p;
-        int grid_row = int(rank / m_block_size);
+        int process_grid_col = rank % sqrt_p;
+        int process_grid_row = int(rank / m_block_size);
 
         // This loop iterates through each vertex k, 
         // treating it as an intermediate vertex in potential shortest paths between all pairs of vertices.
@@ -63,21 +62,21 @@ private:
             int k_grid_row = int(k / m_block_size);
             int last_row_owner = (k_grid_row * sqrt_p) + sqrt_p - 1;
 
-            if (should_send_row(k, sqrt_p, grid_row)) {
+            if (should_send_row(k, sqrt_p, process_grid_row)) {
                 int local_row_index = k % m_block_size;
 
                 for (int i = 0; i < m_block_size; i++) {
-                    global_row_buffer[(grid_col * m_block_size) + i] = local_matrix[local_row_index][i];
+                    global_row_buffer[(process_grid_col * m_block_size) + i] = local_matrix[local_row_index][i];
                 }
 
-                if (grid_col > 0) {
+                if (process_grid_col > 0) {
                     int coords[2];
                     MPI_Cart_coords(comm, rank, 2, coords);
                     coords[1]--;
                     int rec_partner;
                     MPI_Cart_rank(comm, coords, &rec_partner);
 
-                    std::vector<int> temp(m_block_size * grid_col);
+                    std::vector<int> temp(m_block_size * process_grid_col);
 
                     m_log_stream << "\niteration " << k << " : " << rank << " receives row from " << rec_partner << "\n";
                     m_logger.debug(m_log_stream.str());
@@ -90,15 +89,13 @@ private:
                 int coords[2];
                 MPI_Cart_coords(comm, rank, 2, coords);
                 coords[1]++;
-                if (grid_col + 1 < sqrt_p) {
+                if (process_grid_col + 1 < sqrt_p) {
                     int partner;
                     MPI_Cart_rank(comm, coords, &partner);
                     m_log_stream << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
                     m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
-                    //print_vector(global_row_buffer);
-                    //std::cout << "----------------\n\n";
-                    MPI_Send(global_row_buffer.data(), m_block_size * (grid_col + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
+                    MPI_Send(global_row_buffer.data(), m_block_size * (process_grid_col + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
                 }
             }
 
@@ -106,36 +103,32 @@ private:
 
             // Column Responsibility: owner_col determines which process is responsible for broadcasting a particular column k. 
             // If the current process is responsible, it fills col_buffer with that column.
-
-            // adds extra range for last column
             
             // sets column broadcaster index
             int last_col_owner = size - sqrt_p + int(k / m_block_size);
 
-            if (should_send_column(k, sqrt_p, grid_col, rank)) {
+            if (should_send_column(k, sqrt_p, process_grid_col, rank)) {
 
-                if (grid_row > 0) {
+                if (process_grid_row > 0) {
                     int rec_partner = rank - m_block_size;
-                    std::vector<int> temp(m_block_size * grid_row);
+                    std::vector<int> temp(m_block_size * process_grid_row);
                     m_log_stream << "\niteration " << k << " : " << rank << " receives column from " << rec_partner << "\n";
                     m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
                     MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    //print_vector(temp);
-                    //std::cout << "----------------\n\n";
                     std::copy(temp.begin(), temp.end(), global_col_buffer.begin());
                 }
 
                 int local_col_index = k % m_block_size;
                 for (int i = 0; i < m_block_size; i++) {
-                    global_col_buffer[(grid_row * m_block_size) + i] = local_matrix[i][local_col_index];
+                    global_col_buffer[(process_grid_row * m_block_size) + i] = local_matrix[i][local_col_index];
                 }
                 int partner = rank + m_block_size;
                 if (partner < size) {
                     m_log_stream << "\niteration " << k << " : " << rank << " sends column to " << partner << "\n";
                     m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
-                    MPI_Send(global_col_buffer.data(), m_block_size * (grid_row + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
+                    MPI_Send(global_col_buffer.data(), m_block_size * (process_grid_row + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
                 }
             }
             MPI_Bcast(global_col_buffer.data(), n, MPI_INT, last_col_owner, MPI_COMM_WORLD);
@@ -144,7 +137,7 @@ private:
             // with the potential shorter path col_buffer[i] + row_buffer[j]. 
             // If the new path is shorter, it updates D[i][j].
             
-            update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, grid_row, grid_col);
+            update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, process_grid_row, process_grid_col);
         }
     }
     int calculate_matrix_dimension(const std::string& file_path) {
@@ -169,15 +162,13 @@ private:
         MPI_Abort(MPI_COMM_WORLD, 1);
         return -1; // In case of an error
     }
-
-    void read_local_block(std::vector<std::vector<int>>& local_matrix) {
-        std::ifstream file(input_file_path);
+    void read_matrix_from_file_parallel(std::vector<std::vector<int>>& local_matrix, int sqrt_p) {
+        std::ifstream file(m_input_file_path);
         if (!file.is_open()) {
             std::cerr << "Unable to open file." << std::endl;
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
-        int sqrt_p = std::sqrt(size);
         int row_block = rank / sqrt_p;
         int col_block = rank % sqrt_p;
         int start_row = row_block * m_block_size;
@@ -208,26 +199,27 @@ public:
 
         std::vector<std::vector<int>> matrix;
         if (rank == MPI_ROOT) {
-            n = calculate_matrix_dimension(input_file_path);
+            n = calculate_matrix_dimension(m_input_file_path);
         }
 
         MPI_Bcast(&n, 1, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
+
         m_block_size = n / dims[0];
+        int sqrt_p = static_cast<int>(sqrt(size));
 
         std::vector<std::vector<int>> local_matrix(m_block_size, std::vector<int>(m_block_size));
-        read_local_block(local_matrix);
+        read_matrix_from_file_parallel(local_matrix, sqrt_p);
 
-        floyd_all_pairs_parallel(local_matrix, n, grid_comm);
+        floyd_all_pairs_parallel(local_matrix, n, grid_comm, sqrt_p);
 
         std::vector<int> full_matrix;
         if (rank == MPI_ROOT) {
             full_matrix.resize(n * n);
         }
-        int sqrt_p = static_cast<int>(sqrt(size));
         gather_matrix(local_matrix, full_matrix, m_block_size, n);
         if (rank == MPI_ROOT) {
-            print_full_matrix(full_matrix, n, m_block_size, sqrt_p);
-            write_matrix_to_file(full_matrix, n, m_block_size, sqrt_p, "./");
+            //print_flat_matrix(full_matrix, n, m_block_size, sqrt_p);
+            write_flat_matrix_to_file(full_matrix, n, m_block_size, sqrt_p, m_input_file_path + "output_matrix.txt");
         }
 
         MPI_Comm_free(&grid_comm);
@@ -236,7 +228,7 @@ public:
 private:
     int rank, size, n;
     int dims[2];
-    std::string input_file_path;
+    std::string m_input_file_path;
 
     void initialize_grid(MPI_Comm& grid_comm) {
         dims[0] = dims[1] = 0;
@@ -245,43 +237,6 @@ private:
         MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 0, &grid_comm);
     }
 
-    void print_matrix(const std::vector<std::vector<int>>& matrix) {
-        std::stringstream stream;
-        for (const auto& row : matrix) {
-            for (const auto& elem : row) {
-                stream << elem << " ";
-            }
-            stream << std::endl;
-        }
-        std::cout << stream.str();
-    }
-
-    void print_vector(std::vector<int> const& input)
-    {
-        for (int i = 0; i < input.size(); i++) {
-            std::cout << input.at(i) << ' ';
-        }
-        std::cout << "\n";
-    }
-
-    void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const std::string& filename) {
-        std::ifstream file(filename);
-        if (!file.is_open()) {
-            std::cerr << "Unable to open file for reading." << std::endl;
-            return;
-        }
-
-        std::string line;
-        while (std::getline(file, line)) {
-            std::vector<int> row;
-            std::stringstream ss(line);
-            int value;
-            while (ss >> value) {
-                row.push_back(value);
-            }
-            matrix.push_back(row);
-        }
-    }
 
     std::vector<int> create_2D_partition(const std::vector<std::vector<int>>& matrix, int block_size) {
         int num_blocks = size;
@@ -299,11 +254,8 @@ private:
         return flat_matrix;
     }
 
-
-    void update_local_matrix(std::vector<std::vector<int>>& local_matrix,
-        const std::vector<int>& global_row_buffer,
-        const std::vector<int>& global_col_buffer, 
-        int&grid_row, int& grid_col) {
+    void update_local_matrix(std::vector<std::vector<int>>& local_matrix, const std::vector<int>& global_row_buffer,
+        const std::vector<int>& global_col_buffer, int&grid_row, int& grid_col) {
         for (int i = 0; i < local_matrix.size(); i++) {
             for (int j = 0; j < local_matrix[i].size(); j++) {
                 if (local_matrix[i][j] > global_col_buffer[j + grid_col * m_block_size] + global_row_buffer[i + grid_row * m_block_size]) {
@@ -351,13 +303,13 @@ private:
         }
     }
 
-    void print_full_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p) {
+    void print_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p) {
         loop_flat_matrix(matrix, n, block_size, sqrt_p, [this](int value) {
             print_element(value); // Now this will work since 'this' is captured
             });
         std::cout << std::endl; // Add a final newline after the matrix is printed
     }
-    void write_matrix_to_file(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, const std::string& file_path) {
+    void write_flat_matrix_to_file(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, const std::string& file_path) {
         std::ofstream file(file_path);
         if (!file.is_open()) {
             std::cerr << "Failed to open file for writing!" << std::endl;
