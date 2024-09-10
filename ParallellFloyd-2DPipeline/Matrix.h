@@ -8,6 +8,8 @@
 #include <sstream>
 #include <filesystem>
 
+#define INF INT_MAX
+
 inline void print_matrix(const std::vector<std::vector<int>>& matrix) {
     std::stringstream stream;
     for (const auto& row : matrix) {
@@ -45,4 +47,72 @@ inline void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const s
         matrix.push_back(row);
     }
 
+}
+
+inline void print_element(int value) {
+    if (value == INF) {
+        std::cout << "INF ";
+    }
+    else {
+        std::cout << value << " ";
+    }
+}
+
+inline void write_element_to_file(int value, std::ofstream& file) {
+    if (value == INF) {
+        file << "INF ";
+    }
+    else {
+        file << value << " ";
+    }
+}
+
+template <typename Func>
+inline void loop_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, Func func) {
+    for (int block_row = 0; block_row < sqrt_p; ++block_row) {
+        for (int row_in_block = 0; row_in_block < block_size; ++row_in_block) {
+            for (int block_col = 0; block_col < sqrt_p; ++block_col) {
+                for (int col_in_block = 0; col_in_block < block_size; ++col_in_block) {
+                    int flat_idx = (block_row * sqrt_p + block_col) * block_size * block_size
+                        + row_in_block * block_size + col_in_block;
+                    int value = matrix[flat_idx];
+
+                    func(value);
+                }
+            }
+        }
+    }
+}
+
+inline void print_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p) {
+    int counter = 0;
+    loop_flat_matrix(matrix, n, block_size, sqrt_p, [&counter, &n](int value) {
+        print_element(value); // Print the current element
+        counter++; // Increment the counter
+
+        if (counter % n == 0) { // If we've printed 'n' elements, it's time for a newline
+            std::cout << std::endl;
+        }
+        });
+    std::cout << std::endl;
+}
+inline void write_flat_matrix_to_file(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, const std::string& file_path) {
+    std::ofstream file(file_path);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file for writing!" << std::endl;
+        return;
+    }
+
+    int counter = 0;
+
+    loop_flat_matrix(matrix, n, block_size, sqrt_p, [&counter, &n, &file](int value) {
+        write_element_to_file(value, file);
+        counter++; // Increment the counter
+
+        if (counter % n == 0) { // If we've printed 'n' elements, it's time for a newline
+            file << std::endl;
+        }
+        });
+
+    file.close();
 }
