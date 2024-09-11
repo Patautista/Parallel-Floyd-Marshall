@@ -89,7 +89,7 @@ private:
                 int coords[2];
                 MPI_Cart_coords(comm, rank, 2, coords);
                 coords[1]++;
-                if (process_grid_col + 1 < sqrt_p) {
+                if (rank != last_row_owner) {
                     int partner;
                     MPI_Cart_rank(comm, coords, &partner);
                     m_log_stream << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
@@ -124,7 +124,7 @@ private:
                     global_col_buffer[(process_grid_row * m_block_size) + i] = local_matrix[i][local_col_index];
                 }
                 int partner = rank + m_block_size;
-                if (partner < size) {
+                if (rank != last_col_owner) {
                     m_log_stream << "\niteration " << k << " : " << rank << " sends column to " << partner << "\n";
                     m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
