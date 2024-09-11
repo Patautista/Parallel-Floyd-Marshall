@@ -1,6 +1,0 @@
-{
-  "input_file": "",
-  "processors": 4,
-  "log_level": "INFO", // DEBUG, INFO, WARNING, ERROR
-  "log_output": "app.log"
-}

@@ -1,0 +1,6 @@
+{
+  "LogLevel": "INFO",
+  "InputPath": "",
+  "LogOutput": "floyd.log",
+  "Method": "Serial"
+}
