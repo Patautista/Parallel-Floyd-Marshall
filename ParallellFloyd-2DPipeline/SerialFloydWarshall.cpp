@@ -12,7 +12,6 @@ public:
     SerialFloydWarshall(const std::string& input_file_path) : m_input_file_path(input_file_path) {
         // Read the input matrix from the file
         n = calculate_matrix_dimension(m_input_file_path);
-        matrix.resize(n, std::vector<int>(n));
         read_matrix_from_file(matrix, input_file_path);
     }
 

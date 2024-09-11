@@ -49,7 +49,7 @@ inline void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const s
 
 }
 // Writes the result matrix to a file
-void write_matrix_to_file(std::vector<std::vector<int>>& matrix, const std::string& output_file_path, int n) {
+inline void write_matrix_to_file(std::vector<std::vector<int>>& matrix, const std::string& output_file_path, int n) {
     std::ofstream file(output_file_path);
     if (!file.is_open()) {
         std::cerr << "Unable to open file for writing." << std::endl;
@@ -70,7 +70,7 @@ void write_matrix_to_file(std::vector<std::vector<int>>& matrix, const std::stri
 }
 
 // Reads the dimension of the matrix from the file
-int calculate_matrix_dimension(const std::string& file_path) {
+inline int calculate_matrix_dimension(const std::string& file_path) {
     std::ifstream file(file_path);
     if (!file.is_open()) {
         std::cerr << "Unable to open file." << std::endl;
