@@ -54,13 +54,15 @@ private:
 
         // This loop iterates through each vertex k, 
         // treating it as an intermediate vertex in potential shortest paths between all pairs of vertices.
-        for (int k = 1; k < n; k++) {
+        for (int k = 0; k < n; k++) {
+
 
             // Row Responsibility: owner_row determines which process is responsible for broadcasting a particular row k. 
             // If the current process is responsible, it fills row_buffer with that row.
 
             int k_grid_row = int(k / m_block_size);
             int last_row_owner = (k_grid_row * sqrt_p) + sqrt_p - 1;
+
 
             if (should_send_row(k, sqrt_p, process_grid_row)) {
                 int local_row_index = k % m_block_size;
@@ -140,6 +142,7 @@ private:
             update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, process_grid_row, process_grid_col, k);
         }
     }
+
     int calculate_matrix_dimension(const std::string& file_path) {
         std::ifstream file(file_path);
         if (!file.is_open()) {
@@ -185,12 +188,14 @@ private:
         }
     }
     bool should_send_row(int& k, int& sqrt_p, int& grid_row) {
-        int extra_range = (grid_row == sqrt_p - 1 ? 1 : 0);
-        return (int(rank / sqrt_p) < k && k < int(rank / sqrt_p) + m_block_size + extra_range);
+        int extra_range_last = (grid_row == sqrt_p - 1 ? 1 : 0);
+        int extra_range_first = (k == 0 ? 1 : 0);
+        return (int(rank / sqrt_p) - extra_range_first < k && k < int(rank / sqrt_p) + m_block_size + extra_range_last);
     }
     bool should_send_column(int& k, int& sqrt_p, int& grid_col, int& rank) {
-        int extra_range = (grid_col == sqrt_p - 1 ? 1 : 0);
-        return ((rank % sqrt_p) < k && (k < rank % sqrt_p + m_block_size) + extra_range);
+        int extra_range_last = (grid_col == sqrt_p - 1 ? 1 : 0);
+        int extra_range_first = (k == 0 ? 1 : 0);
+        return ((rank % sqrt_p) - extra_range_first < k && (k < rank % sqrt_p + m_block_size) + extra_range_last);
     }
 public:
     void execute() {
@@ -218,7 +223,7 @@ public:
         }
         gather_matrix(local_matrix, full_matrix, m_block_size, n, sqrt_p);
         if (rank == MPI_ROOT) {
-            print_flat_matrix(full_matrix, n, m_block_size, sqrt_p);
+            //print_flat_matrix(full_matrix, n, m_block_size, sqrt_p);
             write_flat_matrix_to_file(full_matrix, n, m_block_size, sqrt_p, m_input_file_path + "_result.txt");
         }
 
