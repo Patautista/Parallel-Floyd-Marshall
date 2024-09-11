@@ -10,6 +10,10 @@
 #include "ParallellFloydWarshall.cpp"
 
 int main(int argc, char** argv) {
+    Logger& logger = Logger::getInstance();
+    logger.enableFileLogging("app.log");
+    logger.setLogLevel(LogLevel::INFO);
+
     ParallelFloydWarshall floyd(argc, argv);
     floyd.execute();
     return 0;

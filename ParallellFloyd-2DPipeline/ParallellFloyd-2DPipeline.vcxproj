@@ -131,10 +131,17 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ParallellFloydWarshall.cpp" />
+    <ClCompile Include="SerialFloydWarshall.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="commands.md" />
-    <None Include="settings.json" />
+    <CopyFileToFolders Include="settings.json">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</DeploymentContent>
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</DeploymentContent>
+    </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FloydWarshall.h" />

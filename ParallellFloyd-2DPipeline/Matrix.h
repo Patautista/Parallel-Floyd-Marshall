@@ -48,7 +48,50 @@ inline void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const s
     }
 
 }
+// Writes the result matrix to a file
+void write_matrix_to_file(std::vector<std::vector<int>>& matrix, const std::string& output_file_path, int n) {
+    std::ofstream file(output_file_path);
+    if (!file.is_open()) {
+        std::cerr << "Unable to open file for writing." << std::endl;
+        return;
+    }
 
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (matrix[i][j] == INF) {
+                file << "INF ";
+            }
+            else {
+                file << matrix[i][j] << " ";
+            }
+        }
+        file << std::endl;
+    }
+}
+
+// Reads the dimension of the matrix from the file
+int calculate_matrix_dimension(const std::string& file_path) {
+    std::ifstream file(file_path);
+    if (!file.is_open()) {
+        std::cerr << "Unable to open file." << std::endl;
+        exit(1);
+    }
+
+    std::string line;
+    if (std::getline(file, line)) {
+        std::istringstream iss(line);
+        int count = 0;
+        int value;
+        while (iss >> value) {
+            count++;
+        }
+        return count;
+    }
+
+    std::cerr << "Error reading file." << std::endl;
+    exit(1);
+    return -1;
+}
 inline void print_element(int value) {
     if (value == INF) {
         std::cout << "INF ";

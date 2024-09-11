@@ -17,8 +17,7 @@
 class ParallelFloydWarshall {
 public:
     ParallelFloydWarshall(int argc, char** argv) {
-        m_logger.enableFileLogging("app.log");
-        m_logger.setLogLevel(LogLevel::INFO);
+        
         MPI_Init(&argc, &argv);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -138,7 +137,7 @@ private:
             // with the potential shorter path col_buffer[i] + row_buffer[j]. 
             // If the new path is shorter, it updates D[i][j].
             
-            update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, process_grid_row, process_grid_col);
+            update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, process_grid_row, process_grid_col, k);
         }
     }
     int calculate_matrix_dimension(const std::string& file_path) {
@@ -238,7 +237,6 @@ private:
         MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 0, &grid_comm);
     }
 
-
     std::vector<int> create_2D_partition(const std::vector<std::vector<int>>& matrix, int block_size) {
         int num_blocks = size;
         std::vector<int> flat_matrix(matrix.size() * matrix.size());
@@ -256,12 +254,15 @@ private:
     }
 
     void update_local_matrix(std::vector<std::vector<int>>& local_matrix, const std::vector<int>& global_row_buffer,
-        const std::vector<int>& global_col_buffer, int&grid_row, int& grid_col) {
+        const std::vector<int>& global_col_buffer, int&grid_row, int& grid_col, int k) {
         for (int i = 0; i < local_matrix.size(); i++) {
             for (int j = 0; j < local_matrix[i].size(); j++) {
-                if (local_matrix[i][j] > global_col_buffer[j + grid_col * m_block_size] + global_row_buffer[i + grid_row * m_block_size]) {
-                    local_matrix[i][j] = global_col_buffer[j + grid_col * m_block_size] + global_row_buffer[i * grid_row];
-                    m_log_stream << "\nprocess " << rank << " updated element " << i << "," << j << " to " << global_col_buffer[j + grid_col * m_block_size] << " + " << global_row_buffer[i + grid_row * m_block_size] << " [" << global_col_buffer[j + grid_col * m_block_size] + global_row_buffer[i + grid_row * m_block_size] << "]\n";
+                int row_buffer_index = i + grid_row * m_block_size;
+                int col_buffer_index = j + grid_col * m_block_size;
+                std::cout << "\nk = " << k << " process = " << rank << "\ncompare " << row_buffer_index << "," << col_buffer_index << " to " << row_buffer_index << "," << k << " + " << k << "," << col_buffer_index << "\n";
+                if (local_matrix[i][j] > global_col_buffer[col_buffer_index] + global_row_buffer[row_buffer_index]) {
+                    local_matrix[i][j] = global_col_buffer[col_buffer_index] + global_row_buffer[row_buffer_index];
+                    m_log_stream << "\nk = " << k << ", process " << rank << " updated its element " << i << ", " << j << " to " << global_col_buffer[col_buffer_index] << " + " << global_row_buffer[row_buffer_index] << "[" << global_col_buffer[col_buffer_index] + global_row_buffer[row_buffer_index] << "]\n";
                     m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
                 }
