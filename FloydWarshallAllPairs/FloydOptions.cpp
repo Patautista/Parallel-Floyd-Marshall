@@ -36,6 +36,26 @@ public:
         return true;
     }
 
+    std::string serialize() const {
+        nlohmann::json j;
+        j["LogLevel"] = LogLevel;
+        j["InputPath"] = InputPath;
+        j["LogOutput"] = LogOutput;
+        j["Method"] = Method;
+        return j.dump(); // Convert to a compact string representation
+    }
+
+    // Deserialize the options from a JSON string
+    static FloydOptions deserialize(const std::string& data) {
+        nlohmann::json j = nlohmann::json::parse(data);
+        FloydOptions options;
+        options.LogLevel = j.value("LogLevel", "INFO");
+        options.InputPath = j.value("InputPath", "");
+        options.LogOutput = j.value("LogOutput", "floyd.log");
+        options.Method = j.value("Method", "Serial");
+        return options;
+    }
+
     // Method to print a sample of the expected options.json file
     static void print_sample() {
         std::cout << R"({

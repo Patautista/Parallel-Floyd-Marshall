@@ -12,21 +12,41 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     FloydOptions options;
+    std::string serialized_options;
+
     const std::string file_path = "options.json";
 
-    // Try to load options from file
-    if (!options.load_from_file(file_path)) {
-        if (rank == MPI_ROOT) {
+    if (rank == MPI_ROOT) {
+        // Root process: read and serialize options
+        if (!options.load_from_file(file_path)) {
             std::cerr << "Warning: '" << file_path << "' not found or is invalid. Please ensure the file exists with the correct structure." << std::endl;
             FloydOptions::print_sample();
+            MPI_Abort(MPI_COMM_WORLD, 1);  // Exit with error code
         }
-        return 1;  // Exit with error code
+        serialized_options = options.serialize(); // Serialize options to string
     }
 
+    // Broadcast the size of the serialized options string
+    int option_size = serialized_options.size();
+    MPI_Bcast(&option_size, 1, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
+
+    // Broadcast the serialized options string
+    std::vector<char> buffer(option_size);
+    if (rank == MPI_ROOT) {
+        std::copy(serialized_options.begin(), serialized_options.end(), buffer.begin());
+    }
+
+    MPI_Bcast(buffer.data(), option_size, MPI_CHAR, MPI_ROOT, MPI_COMM_WORLD);
+
+    if (rank != MPI_ROOT) {
+        // Non-root processes: deserialize options
+        std::string received_data(buffer.begin(), buffer.end());
+        options = FloydOptions::deserialize(received_data);
+    }
+
+    // Proceed with using the options object on all processes
     Logger& logger = Logger::getInstance();
     logger.enableFileLogging(options.LogOutput);
-    // Convert log level string to enum
-    
     logger.setLogLevel(logger.stringToLogLevel(options.LogLevel));
 
     // Success: You can use the options here
@@ -45,5 +65,7 @@ int main(int argc, char** argv) {
         SerialFloydWarshall floyd(options);
         floyd.execute();
     }
+
+    MPI_Finalize();
     return 0;
 }

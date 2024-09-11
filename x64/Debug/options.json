@@ -1,6 +1,6 @@
 {
   "LogLevel": "INFO",
-  "InputPath": "",
+  "InputPath": "C:\\Users\\caleb\\source\\repos\\ParallellFloyd-2DPipeline\\samples\\1",
   "LogOutput": "floyd.log",
   "Method": "Serial"
 }
