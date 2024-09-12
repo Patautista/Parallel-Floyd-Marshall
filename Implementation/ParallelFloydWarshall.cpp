@@ -51,9 +51,8 @@ private:
             // Row Responsibility: owner_row determines which process is responsible for broadcasting a particular row k. 
             // If the current process is responsible, it fills row_buffer with that row.
 
-            int k_grid_row = int(k / m_block_size);
-            int last_row_owner = (k_grid_row * sqrt_p) + sqrt_p - 1;
-
+            int k_grid_index = int(k / m_block_size);
+            int last_row_owner = (k_grid_index * sqrt_p) + sqrt_p - 1;
 
             if (should_send_row(k, sqrt_p, process_grid_row)) {
                 int local_row_index = k % m_block_size;
@@ -75,7 +74,7 @@ private:
                     m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
 
-                    MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     std::copy(temp.begin(), temp.end(), global_row_buffer.begin());
                 }
 
@@ -88,7 +87,7 @@ private:
                     m_log_stream << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
                     m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
-                    MPI_Send(global_row_buffer.data(), m_block_size * (process_grid_col + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
+                    MPI_Send(global_row_buffer.data(), m_block_size * (process_grid_col + 1), MPI_INT, partner, 1, MPI_COMM_WORLD);
                 }
             }
 
@@ -98,9 +97,9 @@ private:
             // If the current process is responsible, it fills col_buffer with that column.
             
             // sets column broadcaster index
-            int last_col_owner = size - sqrt_p + int(k / m_block_size);
+            int last_col_owner = size - sqrt_p + k_grid_index;
 
-            if (should_send_column(k, sqrt_p, process_grid_col, rank)) {
+            if (should_send_column(k, sqrt_p, process_grid_col)) {
 
                 if (process_grid_row > 0) {
                     int rec_partner = rank - m_block_size;
@@ -108,7 +107,7 @@ private:
                     m_log_stream << "\niteration " << k << " : " << rank << " receives column from " << rec_partner << "\n";
                     m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
-                    MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     std::copy(temp.begin(), temp.end(), global_col_buffer.begin());
                 }
 
@@ -121,7 +120,7 @@ private:
                     m_log_stream << "\niteration " << k << " : " << rank << " sends column to " << partner << "\n";
                     m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
-                    MPI_Send(global_col_buffer.data(), m_block_size * (process_grid_row + 1), MPI_INT, partner, 0, MPI_COMM_WORLD);
+                    MPI_Send(global_col_buffer.data(), m_block_size * (process_grid_row + 1), MPI_INT, partner, 2, MPI_COMM_WORLD);
                 }
             }
             MPI_Bcast(global_col_buffer.data(), n, MPI_INT, last_col_owner, MPI_COMM_WORLD);
@@ -179,14 +178,14 @@ private:
         }
     }
     bool should_send_row(int& k, int& sqrt_p, int& grid_row) {
-        int extra_range_last = (grid_row == sqrt_p - 1 ? 1 : 0);
-        int extra_range_first = (k == 0 ? 1 : 0);
-        return (int(rank / sqrt_p) - extra_range_first < k && k < int(rank / sqrt_p) + m_block_size + extra_range_last);
+        int top_limit = grid_row * m_block_size;
+        int bottom_limit = top_limit + m_block_size - 1;
+        return k >= top_limit && k <= bottom_limit;
     }
-    bool should_send_column(int& k, int& sqrt_p, int& grid_col, int& rank) {
-        int extra_range_last = (grid_col == sqrt_p - 1 ? 1 : 0);
-        int extra_range_first = (k == 0 ? 1 : 0);
-        return ((rank % sqrt_p) - extra_range_first < k && (k < rank % sqrt_p + m_block_size) + extra_range_last);
+    bool should_send_column(int& k, int& sqrt_p, int& grid_col) {
+        int left_limit = grid_col * m_block_size;
+        int right_limit = left_limit + m_block_size - 1;
+        return k>= left_limit && k <= right_limit;
     }
 public:
     void execute() {
@@ -200,8 +199,8 @@ public:
 
         MPI_Bcast(&n, 1, MPI_INT, MPI_ROOT, MPI_COMM_WORLD);
 
-        m_block_size = n / dims[0];
         int sqrt_p = static_cast<int>(sqrt(size));
+        m_block_size = int(n / sqrt_p);
 
         std::vector<std::vector<int>> local_matrix(m_block_size, std::vector<int>(m_block_size));
         read_matrix_from_file_parallel(local_matrix, sqrt_p);
@@ -241,13 +240,8 @@ private:
                 //std::cout << "\nk = " << k << " process = " << rank << "\ncompare " << row_buffer_index << "," << col_buffer_index << " to " << row_buffer_index << "," << k << " + " << k << "," << col_buffer_index << "\n";
                 if (local_matrix[i][j] > global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index]) {
                     local_matrix[i][j] = global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index];
-                    m_log_stream << "row_buffer_index: " << row_buffer_index << "\n";
-                    print_vector(global_col_buffer);
-                    m_log_stream << "col_buffer_index: " << col_buffer_index << "\n";
-                    print_vector(global_row_buffer);
-
                     m_log_stream << "\nk = " << k << ", process " << rank << " updated element " << row_buffer_index << "," << col_buffer_index << " to " << global_col_buffer[row_buffer_index] << " + " << global_row_buffer[col_buffer_index] << " [" << global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index] << "]\n";
-                    m_logger.info(m_log_stream.str());
+                    m_logger.debug(m_log_stream.str());
                     m_log_stream.flush();
                 }
             }

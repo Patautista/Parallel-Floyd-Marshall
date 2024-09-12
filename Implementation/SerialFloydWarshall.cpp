@@ -18,7 +18,7 @@ public:
 
     void execute() {
         floyd_all_pairs();
-        print_matrix(matrix);
+        //print_matrix(matrix);
         write_matrix_to_file(matrix, m_options.InputPath + "_result_serial.txt", n);
     }
 

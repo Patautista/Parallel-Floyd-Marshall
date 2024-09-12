@@ -3,7 +3,6 @@
 #include "FloydOptions.cpp"
 #include <mpi.h>
 #include <filesystem>
-#include <windows.h>
 
 using namespace std::filesystem;
 
@@ -66,10 +65,12 @@ int main(int argc, char** argv) {
         floyd.execute();
     }
     else {
-        SerialFloydWarshall floyd(options);
-        floyd.execute();
+        if (rank == MPI_ROOT) {
+            SerialFloydWarshall floyd(options);
+            floyd.execute();
+        }
+        MPI_Finalize();
     }
 
-    MPI_Finalize();
     return 0;
 }
