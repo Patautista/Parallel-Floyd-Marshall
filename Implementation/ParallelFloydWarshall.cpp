@@ -215,7 +215,7 @@ public:
         gather_matrix(local_matrix, full_matrix, m_block_size, n, sqrt_p);
         if (rank == MPI_ROOT) {
             //print_flat_matrix(full_matrix, n, m_block_size, sqrt_p);
-            write_flat_matrix_to_file(full_matrix, n, m_block_size, sqrt_p, m_options.InputPath + "_result.txt");
+            write_flat_matrix_to_file(full_matrix, n, m_block_size, sqrt_p, m_options.InputPath + "_result_parallel.txt");
         }
 
         MPI_Comm_free(&grid_comm);
@@ -232,22 +232,6 @@ private:
         MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 0, &grid_comm);
     }
 
-    std::vector<int> create_2D_partition(const std::vector<std::vector<int>>& matrix, int block_size) {
-        int num_blocks = size;
-        std::vector<int> flat_matrix(matrix.size() * matrix.size());
-        for (int p = 0; p < num_blocks; p++) {
-            int block_row = p / block_size;
-            int block_col = p % block_size;
-            for (int i = 0; i < block_size; i++) {
-                for (int j = 0; j < block_size; j++) {
-                    flat_matrix[p * n + i * block_size + j] =
-                        matrix[block_row * block_size + i][block_col * block_size + j];
-                }
-            }
-        }
-        return flat_matrix;
-    }
-
     void update_local_matrix(std::vector<std::vector<int>>& local_matrix, const std::vector<int>& global_row_buffer,
         const std::vector<int>& global_col_buffer, int&grid_row, int& grid_col, int k) {
         for (int i = 0; i < local_matrix.size(); i++) {
@@ -257,16 +241,14 @@ private:
                 //std::cout << "\nk = " << k << " process = " << rank << "\ncompare " << row_buffer_index << "," << col_buffer_index << " to " << row_buffer_index << "," << k << " + " << k << "," << col_buffer_index << "\n";
                 if (local_matrix[i][j] > global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index]) {
                     local_matrix[i][j] = global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index];
-                    if (rank == 2) {
-                        m_log_stream << "row_buffer_index: " << row_buffer_index << "\n";
-                        print_vector(global_col_buffer);
-                        m_log_stream << "col_buffer_index: " << col_buffer_index << "\n";
-                        print_vector(global_row_buffer);
+                    m_log_stream << "row_buffer_index: " << row_buffer_index << "\n";
+                    print_vector(global_col_buffer);
+                    m_log_stream << "col_buffer_index: " << col_buffer_index << "\n";
+                    print_vector(global_row_buffer);
 
-                        m_log_stream << "\nk = " << k << ", process " << rank << " updated element " << row_buffer_index << "," << col_buffer_index << " to " << global_col_buffer[row_buffer_index] << " + " << global_row_buffer[col_buffer_index] << " [" << global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index] << "]\n";
-                        m_logger.info(m_log_stream.str());
-                        m_log_stream.flush();
-                    }
+                    m_log_stream << "\nk = " << k << ", process " << rank << " updated element " << row_buffer_index << "," << col_buffer_index << " to " << global_col_buffer[row_buffer_index] << " + " << global_row_buffer[col_buffer_index] << " [" << global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index] << "]\n";
+                    m_logger.info(m_log_stream.str());
+                    m_log_stream.flush();
                 }
             }
         }

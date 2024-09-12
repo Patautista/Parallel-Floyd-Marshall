@@ -2,6 +2,10 @@
 #include <ParallelFloydWarshall.cpp>
 #include "FloydOptions.cpp"
 #include <mpi.h>
+#include <filesystem>
+#include <windows.h>
+
+using namespace std::filesystem;
 
 #define MPI_ROOT 0
 
@@ -14,12 +18,12 @@ int main(int argc, char** argv) {
     FloydOptions options;
     std::string serialized_options;
 
-    const std::string file_path = "options.json";
+    const std::string file_path = current_path().string() + "/options.json";
 
     if (rank == MPI_ROOT) {
         // Root process: read and serialize options
         if (!options.load_from_file(file_path)) {
-            std::cerr << "Warning: '" << file_path << "' not found or is invalid. Please ensure the file exists with the correct structure." << std::endl;
+            std::cerr << "Warning: '" << file_path << "' not found or is invalid. Please ensure the file exists with the correct structure." << "Currently looking in " << current_path().string() << std::endl;
             FloydOptions::print_sample();
             MPI_Abort(MPI_COMM_WORLD, 1);  // Exit with error code
         }

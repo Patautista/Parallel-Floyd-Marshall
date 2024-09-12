@@ -12,19 +12,11 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)Matrix.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)..\ParallellFloyd-2DPipeline\ParallellFloydWarshall.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)..\ParallellFloyd-2DPipeline\Logger.h">
-      <Filter>Include</Filter>
-    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)Json.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)Logger.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\ParallellFloyd-2DPipeline\ParallellFloydWarshall.cpp">
-      <Filter>Source</Filter>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\ParallellFloyd-2DPipeline\SerialFloydWarshall.cpp">
-      <Filter>Source</Filter>
-    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)ParallelFloydWarshall.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)SerialFloydWarshall.cpp" />
   </ItemGroup>
 </Project>

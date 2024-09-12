@@ -15,8 +15,11 @@ public:
     bool load_from_file(const std::string& file_path) {
         std::ifstream file(file_path);
         if (!file.is_open()) {
+            std::cout << "Options file not found. \n";
             return false;
         }
+
+        std::cout << "Options file found. \n";
 
         try {
             nlohmann::json j;
