@@ -205,7 +205,6 @@ public:
         }
         gather_matrix(local_matrix, full_matrix, m_block_size, n, sqrt_p);
         if (rank == MPI_ROOT) {
-            //print_flat_matrix(full_matrix, n, m_block_size, sqrt_p);
             write_flat_matrix_to_file(full_matrix, n, m_block_size, sqrt_p, m_options.InputPath + "_result_parallel.txt");
         }
 
@@ -229,12 +228,8 @@ private:
             for (int j = 0; j < local_matrix[i].size(); j++) {
                 int row_buffer_index = i + grid_row * m_block_size;
                 int col_buffer_index = j + grid_col * m_block_size;
-                //std::cout << "\nk = " << k << " process = " << rank << "\ncompare " << row_buffer_index << "," << col_buffer_index << " to " << row_buffer_index << "," << k << " + " << k << "," << col_buffer_index << "\n";
                 if (local_matrix[i][j] > global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index]) {
                     local_matrix[i][j] = global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index];
-                    m_log_stream << "\nk = " << k << ", process " << rank << " updated element " << row_buffer_index << "," << col_buffer_index << " to " << global_col_buffer[row_buffer_index] << " + " << global_row_buffer[col_buffer_index] << " [" << global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index] << "]\n";
-                    m_logger.debug(m_log_stream.str());
-                    m_log_stream.flush();
                 }
             }
         }

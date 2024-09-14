@@ -1,4 +1,5 @@
 #pragma once
+#include <omp.h>
 #include <mpi.h>
 #include <iostream>
 #include <vector>
@@ -112,6 +113,7 @@ inline void write_element_to_file(int value, std::ofstream& file) {
 
 template <typename Func>
 inline void loop_flat_matrix(const std::vector<int>& matrix, int n, Func func) {
+    #pragma omp parallel for
     for (int i = 0; i < n * n; ++i) {
         func(matrix[i]);  // Apply the function to each element in the flat matrix
     }
