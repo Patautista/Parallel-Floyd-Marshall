@@ -9,6 +9,7 @@
 #include <filesystem>
 #include "Logger.h"
 #include "Matrix.h"
+#include <omp.h>
 #include "../FloydWarshallAllPairs/FloydOptions.cpp"
 
 #define INF INT_MAX
@@ -43,13 +44,7 @@ private:
         int process_grid_col = rank % sqrt_p;
         int process_grid_row = int(rank / m_block_size);
 
-        // This loop iterates through each vertex k, 
-        // treating it as an intermediate vertex in potential shortest paths between all pairs of vertices.
         for (int k = 0; k < n; k++) {
-
-
-            // Row Responsibility: owner_row determines which process is responsible for broadcasting a particular row k. 
-            // If the current process is responsible, it fills row_buffer with that row.
 
             int k_grid_index = int(k / m_block_size);
             int last_row_owner = (k_grid_index * sqrt_p) + sqrt_p - 1;
@@ -57,6 +52,7 @@ private:
             if (should_send_row(k, sqrt_p, process_grid_row)) {
                 int local_row_index = k % m_block_size;
 
+                #pragma omp parallel for
                 for (int i = 0; i < m_block_size; i++) {
                     global_row_buffer[(process_grid_col * m_block_size) + i] = local_matrix[local_row_index][i];
                 }
@@ -92,9 +88,6 @@ private:
             }
 
             MPI_Bcast(global_row_buffer.data(), n, MPI_INT, last_row_owner, MPI_COMM_WORLD);
-
-            // Column Responsibility: owner_col determines which process is responsible for broadcasting a particular column k. 
-            // If the current process is responsible, it fills col_buffer with that column.
             
             // sets column broadcaster index
             int last_col_owner = size - sqrt_p + k_grid_index;
@@ -112,6 +105,7 @@ private:
                 }
 
                 int local_col_index = k % m_block_size;
+                #pragma omp parallel for
                 for (int i = 0; i < m_block_size; i++) {
                     global_col_buffer[(process_grid_row * m_block_size) + i] = local_matrix[i][local_col_index];
                 }
@@ -124,10 +118,6 @@ private:
                 }
             }
             MPI_Bcast(global_col_buffer.data(), n, MPI_INT, last_col_owner, MPI_COMM_WORLD);
-
-            // Each process updates its block of the matrix D by comparing the current distance D[i][j]
-            // with the potential shorter path col_buffer[i] + row_buffer[j]. 
-            // If the new path is shorter, it updates D[i][j].
             
             update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, process_grid_row, process_grid_col, k);
         }
@@ -168,7 +158,9 @@ private:
         int start_col = col_block * m_block_size;
 
         int value;
+        #pragma omp parallel for
         for (int i = 0; i < n; i++) {
+            #pragma omp parallel for
             for (int j = 0; j < n; j++) {
                 file >> value;
                 if (i >= start_row && i < start_row + m_block_size && j >= start_col && j < start_col + m_block_size) {

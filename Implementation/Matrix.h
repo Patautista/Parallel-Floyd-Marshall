@@ -111,25 +111,15 @@ inline void write_element_to_file(int value, std::ofstream& file) {
 }
 
 template <typename Func>
-inline void loop_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, Func func) {
-    for (int block_row = 0; block_row < sqrt_p; ++block_row) {
-        for (int row_in_block = 0; row_in_block < block_size; ++row_in_block) {
-            for (int block_col = 0; block_col < sqrt_p; ++block_col) {
-                for (int col_in_block = 0; col_in_block < block_size; ++col_in_block) {
-                    int flat_idx = (block_row * sqrt_p + block_col) * block_size * block_size
-                        + row_in_block * block_size + col_in_block;
-                    int value = matrix[flat_idx];
-
-                    func(value);
-                }
-            }
-        }
+inline void loop_flat_matrix(const std::vector<int>& matrix, int n, Func func) {
+    for (int i = 0; i < n * n; ++i) {
+        func(matrix[i]);  // Apply the function to each element in the flat matrix
     }
 }
 
 inline void print_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p) {
     int counter = 0;
-    loop_flat_matrix(matrix, n, block_size, sqrt_p, [&counter, &n](int value) {
+    loop_flat_matrix(matrix, n, [&counter, &n](int value) {
         print_element(value); // Print the current element
         counter++; // Increment the counter
 
@@ -148,7 +138,7 @@ inline void write_flat_matrix_to_file(const std::vector<int>& matrix, int n, int
 
     int counter = 0;
 
-    loop_flat_matrix(matrix, n, block_size, sqrt_p, [&counter, &n, &file](int value) {
+    loop_flat_matrix(matrix, n, [&counter, &n, &file](int value) {
         write_element_to_file(value, file);
         counter++; // Increment the counter
 

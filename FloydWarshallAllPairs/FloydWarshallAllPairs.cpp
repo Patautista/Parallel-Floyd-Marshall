@@ -72,5 +72,9 @@ int main(int argc, char** argv) {
         MPI_Finalize();
     }
 
+    if (rank == MPI_ROOT) {
+        logger.info("\nProgram finished successfully.\n");
+    }
+
     return 0;
 }
