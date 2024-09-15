@@ -160,7 +160,6 @@ private:
         int value;
         #pragma omp parallel for
         for (int i = 0; i < n; i++) {
-            #pragma omp parallel for
             for (int j = 0; j < n; j++) {
                 file >> value;
                 if (i >= start_row && i < start_row + m_block_size && j >= start_col && j < start_col + m_block_size) {
@@ -224,6 +223,7 @@ private:
 
     void update_local_matrix(std::vector<std::vector<int>>& local_matrix, const std::vector<int>& global_row_buffer,
         const std::vector<int>& global_col_buffer, int&grid_row, int& grid_col, int k) {
+        #pragma omp parallel for
         for (int i = 0; i < local_matrix.size(); i++) {
             for (int j = 0; j < local_matrix[i].size(); j++) {
                 int row_buffer_index = i + grid_row * m_block_size;

@@ -71,7 +71,7 @@ inline void write_matrix_to_file(std::vector<std::vector<int>>& matrix, const st
 }
 
 // Reads the dimension of the matrix from the file
-inline int calculate_matrix_dimension(const std::string& file_path) {
+inline int calculate_matrix_dimension_from_file(const std::string& file_path) {
     std::ifstream file(file_path);
     if (!file.is_open()) {
         std::cerr << "Unable to open file." << std::endl;
@@ -112,16 +112,39 @@ inline void write_element_to_file(int value, std::ofstream& file) {
 }
 
 template <typename Func>
-inline void loop_flat_matrix(const std::vector<int>& matrix, int n, Func func) {
+inline void loop_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, Func func) {
+    // Total number of elements
+    int total_elements = n * n;
+
     #pragma omp parallel for
-    for (int i = 0; i < n * n; ++i) {
-        func(matrix[i]);  // Apply the function to each element in the flat matrix
+    for (int global_index = 0; global_index < total_elements; ++global_index) {
+        // Calculate global row and column
+        int global_row = global_index / n;
+        int global_col = global_index % n;
+
+        // Calculate the block row and block column
+        int block_row = global_row / block_size;
+        int block_col = global_col / block_size;
+
+        // Local row and column within the block
+        int row_in_block = global_row % block_size;
+        int col_in_block = global_col % block_size;
+
+        // Calculate the block index and the index within the block
+        int block_index = block_row * sqrt_p + block_col;
+        int index_in_block = row_in_block * block_size + col_in_block;
+
+        // Calculate the final flat index
+        int flat_index = block_index * block_size * block_size + index_in_block;
+
+        // Call the provided function with the value and its global position
+        func(matrix[flat_index]);
     }
 }
 
 inline void print_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p) {
     int counter = 0;
-    loop_flat_matrix(matrix, n, [&counter, &n](int value) {
+    loop_flat_matrix(matrix, n, block_size, sqrt_p, [&counter, &n](int value) {
         print_element(value); // Print the current element
         counter++; // Increment the counter
 
@@ -140,7 +163,7 @@ inline void write_flat_matrix_to_file(const std::vector<int>& matrix, int n, int
 
     int counter = 0;
 
-    loop_flat_matrix(matrix, n, [&counter, &n, &file](int value) {
+    loop_flat_matrix(matrix, n,block_size, sqrt_p, [&counter, &n, &file](int value) {
         write_element_to_file(value, file);
         counter++; // Increment the counter
 

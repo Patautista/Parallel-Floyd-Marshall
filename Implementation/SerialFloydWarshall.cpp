@@ -12,7 +12,7 @@ class SerialFloydWarshall {
 public:
     SerialFloydWarshall(FloydOptions& options) : m_options(options){
         // Read the input matrix from the file
-        n = calculate_matrix_dimension(m_options.InputPath);
+        n = calculate_matrix_dimension_from_file(m_options.InputPath);
         read_matrix_from_file(matrix, m_options.InputPath);
     }
 
