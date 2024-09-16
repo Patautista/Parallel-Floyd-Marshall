@@ -74,15 +74,8 @@ private:
                     std::copy(temp.begin(), temp.end(), global_row_buffer.begin());
                 }
 
-                int coords[2];
-                MPI_Cart_coords(comm, rank, 2, coords);
-                coords[1]++;
                 if (rank != last_row_owner) {
-                    int partner;
-                    MPI_Cart_rank(comm, coords, &partner);
-                    m_log_stream << "\niteration " << k << " : " << rank << " sends row to " << partner << "\n";
-                    m_logger.debug(m_log_stream.str());
-                    m_log_stream.flush();
+                    int partner = rank + 1;
                     MPI_Send(global_row_buffer.data(), m_block_size * (process_grid_col + 1), MPI_INT, partner, 1, MPI_COMM_WORLD);
                 }
             }
