@@ -84,16 +84,16 @@ private:
 
         for (int k = 0; k < n; k++) {
 
-            int k_grid_index = k < m_base_block_size + (n % sqrt_p) ? 0 : int((k - 1) / m_base_block_size);
+            int k_grid_index = k < m_base_block_size + (n % sqrt_p) ? 0 : int((k - (n % sqrt_p)) / m_base_block_size);
 
             int last_row_owner = (k_grid_index * sqrt_p) + sqrt_p - 1;
 
             if (should_send_row(k, sqrt_p, process_grid_row)) {
-                int local_row_index = k > m_base_block_size ? k % m_row_start : k;
+                int local_row_index = k - m_row_start;
 
                 #pragma omp parallel for
-                for (int i = 0; i < m_col_count; i++) {
-                    global_row_buffer[(m_column_start)+i] = local_matrix[local_row_index][i];
+                for (int j = 0; j < m_col_count; j++) {
+                    global_row_buffer[(m_column_start)+j] = local_matrix[local_row_index][j];
                 }
 
                 if (process_grid_col > 0) {
@@ -106,7 +106,7 @@ private:
                     std::copy(temp.begin(), temp.end(), global_row_buffer.begin());
                 }
 
-                if (rank != last_row_owner) {
+                if (rank != last_row_owner && rank + 1 < size) {
                     int partner = rank + 1;
                     MPI_Send(global_row_buffer.data(), m_column_start + m_col_count, MPI_INT, partner, 1, MPI_COMM_WORLD);
                 }
@@ -126,12 +126,12 @@ private:
                     std::copy(temp.begin(), temp.end(), global_col_buffer.begin());
                 }
 
-                int local_col_index = k > m_base_block_size ? k % m_column_start : k;
+                int local_col_index = k - m_column_start;
                 #pragma omp parallel for
                 for (int i = 0; i < m_row_count; i++) {
                     global_col_buffer[(m_row_start) + i] = local_matrix[i][local_col_index];
                 }
-                if (rank != last_col_owner) {
+                if (rank != last_col_owner && rank + sqrt_p < size){
                     int partner = rank + sqrt_p;
                     MPI_Send(global_col_buffer.data(), m_row_start + m_row_count, MPI_INT, partner, 2, MPI_COMM_WORLD);
                 }
@@ -162,16 +162,16 @@ private:
 
         for (int k = 0; k < n; k++) {
 
-            int k_grid_index = k < m_base_block_size + (n % sqrt_p) ? 0 : int((k - 1) / m_base_block_size);
+            int k_grid_index = k < m_base_block_size + (n % sqrt_p) ? 0 : int((k - (n % sqrt_p)) / m_base_block_size);
 
             int last_row_owner = (k_grid_index * sqrt_p) + sqrt_p - 1;
 
             if (should_send_row(k, sqrt_p, process_grid_row)) {
-                int local_row_index = k > m_base_block_size ? k % m_row_start : k;
+                int local_row_index = k - m_row_start;
 
                 #pragma omp parallel for
-                for (int i = 0; i < m_col_count; i++) {
-                    global_row_buffer[(m_column_start) + i] = local_matrix[local_row_index][i];
+                for (int j = 0; j < m_col_count; j++) {
+                    global_row_buffer[(m_column_start) + j] = local_matrix[local_row_index][j];
                 }
 
                 if (process_grid_col > 0) {
@@ -184,7 +184,7 @@ private:
                     std::copy(temp.begin(), temp.end(), global_row_buffer.begin());
                 }
 
-                if (rank != last_row_owner) {
+                if (rank != last_row_owner && rank + 1 < size) {
                     int partner = rank + 1;
                     MPI_Send(global_row_buffer.data(), m_column_start + m_col_count, MPI_INT, partner, 1, MPI_COMM_WORLD);
                 }
@@ -287,16 +287,8 @@ public:
 
         std::vector<std::vector<int>> local_matrix(m_row_count, std::vector<int>(m_col_count));
         read_matrix_from_file_parallel(local_matrix, sqrt_p);
-        
 
         floyd_all_pairs_parallel(local_matrix, n, grid_comm, sqrt_p);
-
-        std::vector<int> full_matrix;
-        if (rank == MPI_ROOT) {
-            full_matrix.resize(n * n);
-        }
-        
-        //gather_matrix(local_matrix, full_matrix, sqrt_p);
 
         write_matrix_to_file_parallel(local_matrix, n, sqrt_p, m_options.InputPath + "_result_parallel.txt");
 
@@ -368,6 +360,4 @@ private:
             recv_counts.data(), displs.data(), MPI_INT,
             MPI_ROOT, MPI_COMM_WORLD);
     }
-
-
 };
