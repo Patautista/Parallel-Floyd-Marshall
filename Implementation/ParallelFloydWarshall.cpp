@@ -131,9 +131,6 @@ private:
                 for (int i = 0; i < m_row_count; i++) {
                     global_col_buffer[(m_row_start) + i] = local_matrix[i][local_col_index];
                 }
-                if (rank == 0) {
-                    print_vector(global_col_buffer);
-                }
                 if (rank != last_col_owner) {
                     int partner = rank + sqrt_p;
                     MPI_Send(global_col_buffer.data(), m_row_start + m_row_count, MPI_INT, partner, 2, MPI_COMM_WORLD);
@@ -141,7 +138,7 @@ private:
             }
             MPI_Bcast(global_col_buffer.data(), n, MPI_INT, last_col_owner, MPI_COMM_WORLD);
 
-            //update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, process_grid_row, process_grid_col, k);
+            update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, process_grid_row, process_grid_col, k);
         }
     }
     void write_matrix_to_file_parallel(std::vector<std::vector<int>>& local_matrix, int n, int sqrt_p, const std::string& file_path) {
@@ -322,16 +319,9 @@ private:
         #pragma omp parallel for
         for (int i = 0; i < local_matrix.size(); i++) {
             for (int j = 0; j < local_matrix[i].size(); j++) {
-                int row_buffer_index = m_row_start;
-                int col_buffer_index = m_column_start;
+                int row_buffer_index = i + m_row_start;
+                int col_buffer_index = j + m_column_start;
                 if (local_matrix[i][j] > global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index]) {
-                    /*
-                    if (rank == 0 && i == 0 && j == 4) {
-                        print_vector(global_row_buffer);
-                        print_vector(global_col_buffer);
-                        std::cout << local_matrix[i][j] << " is compared with: " << row_buffer_index << " [" << global_col_buffer[row_buffer_index] << "] + " << global_row_buffer[col_buffer_index] << "\n";
-                    }
-                    */
                     local_matrix[i][j] = global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index];
                 }
             }
