@@ -80,39 +80,35 @@ private:
         std::vector<int> global_col_buffer(n);
 
         int process_grid_col = rank % sqrt_p;
-        int process_grid_row = int(rank / m_base_block_size);
+        int process_grid_row = int(rank / sqrt_p);
 
         for (int k = 0; k < n; k++) {
 
-            int k_grid_index = k < m_base_block_size + (n % sqrt_p) ? 0 : int(k / m_base_block_size);
+            int k_grid_index = k < m_base_block_size + (n % sqrt_p) ? 0 : int((k - 1) / m_base_block_size);
+
             int last_row_owner = (k_grid_index * sqrt_p) + sqrt_p - 1;
-            while (last_row_owner > size) {
-                last_row_owner -= sqrt_p;
-            }
 
             if (should_send_row(k, sqrt_p, process_grid_row)) {
-                int local_row_index = k % m_row_count;
+                int local_row_index = k > m_base_block_size ? k % m_row_start : k;
 
                 #pragma omp parallel for
-                for (int i = 0; i < m_row_count; i++) {
-                    global_row_buffer[(m_column_start) + i] = local_matrix[local_row_index][i];
+                for (int i = 0; i < m_col_count; i++) {
+                    global_row_buffer[(m_column_start)+i] = local_matrix[local_row_index][i];
                 }
 
                 if (process_grid_col > 0) {
                     int rec_partner = rank - 1;
+
                     std::vector<int> temp(m_column_start);
 
-                    m_log_stream << "\niteration " << k << " : " << rank << " receives row from " << rec_partner << "\n";
-                    m_logger.debug(m_log_stream.str());
-                    m_log_stream.flush();
+                    MPI_Recv(temp.data(), m_column_start, MPI_INT, rec_partner, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-                    MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     std::copy(temp.begin(), temp.end(), global_row_buffer.begin());
                 }
 
                 if (rank != last_row_owner) {
                     int partner = rank + 1;
-                    MPI_Send(global_row_buffer.data(), m_column_start + m_row_count, MPI_INT, partner, 1, MPI_COMM_WORLD);
+                    MPI_Send(global_row_buffer.data(), m_column_start + m_col_count, MPI_INT, partner, 1, MPI_COMM_WORLD);
                 }
             }
 
@@ -126,40 +122,32 @@ private:
                 if (process_grid_row > 0) {
                     int rec_partner = rank - sqrt_p;
                     std::vector<int> temp(m_row_start);
-                    m_log_stream << "\niteration " << k << " : " << rank << " receives column from " << rec_partner << "\n";
-                    m_logger.debug(m_log_stream.str());
-                    m_log_stream.flush();
                     MPI_Recv(temp.data(), temp.size(), MPI_INT, rec_partner, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     std::copy(temp.begin(), temp.end(), global_col_buffer.begin());
                 }
 
-                int local_col_index = k % m_col_count;
+                int local_col_index = k > m_base_block_size ? k % m_column_start : k;
                 #pragma omp parallel for
-                for (int i = 0; i < m_col_count; i++) {
+                for (int i = 0; i < m_row_count; i++) {
                     global_col_buffer[(m_row_start) + i] = local_matrix[i][local_col_index];
+                }
+                if (rank == 0) {
+                    print_vector(global_col_buffer);
                 }
                 if (rank != last_col_owner) {
                     int partner = rank + sqrt_p;
-                    m_log_stream << "\niteration " << k << " : " << rank << " sends column to " << partner << "\n";
-                    m_logger.debug(m_log_stream.str());
-                    m_log_stream.flush();
-                    MPI_Send(global_col_buffer.data(), m_row_start + m_col_count, MPI_INT, partner, 2, MPI_COMM_WORLD);
+                    MPI_Send(global_col_buffer.data(), m_row_start + m_row_count, MPI_INT, partner, 2, MPI_COMM_WORLD);
                 }
             }
             MPI_Bcast(global_col_buffer.data(), n, MPI_INT, last_col_owner, MPI_COMM_WORLD);
-            
-            update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, process_grid_row, process_grid_col, k);
+
+            //update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, process_grid_row, process_grid_col, k);
         }
     }
     void write_matrix_to_file_parallel(std::vector<std::vector<int>>& local_matrix, int n, int sqrt_p, const std::string& file_path) {
 
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-        std::vector<int> global_row_buffer(n);
-
-        int process_grid_col = rank % sqrt_p;
-        int process_grid_row = int(rank / m_base_block_size);
 
         std::ofstream file;
         if (rank == MPI_ROOT) {
@@ -169,6 +157,11 @@ private:
                 return;
             }
         }
+
+        std::vector<int> global_row_buffer(n);
+
+        int process_grid_col = rank % sqrt_p;
+        int process_grid_row = int(rank / m_base_block_size);
 
         for (int k = 0; k < n; k++) {
 
@@ -278,7 +271,7 @@ private:
         return k >= m_row_start && k < m_row_start + m_row_count;
     }
     bool should_send_column(int& k, int& sqrt_p, int& grid_col) {
-        return k>= m_column_start && k <= m_column_end;
+        return k>= m_column_start && k < m_column_start + m_col_count;
     }
 public:
     void execute() {
@@ -299,7 +292,7 @@ public:
         read_matrix_from_file_parallel(local_matrix, sqrt_p);
         
 
-        //floyd_all_pairs_parallel(local_matrix, n, grid_comm, sqrt_p);
+        floyd_all_pairs_parallel(local_matrix, n, grid_comm, sqrt_p);
 
         std::vector<int> full_matrix;
         if (rank == MPI_ROOT) {
@@ -329,9 +322,16 @@ private:
         #pragma omp parallel for
         for (int i = 0; i < local_matrix.size(); i++) {
             for (int j = 0; j < local_matrix[i].size(); j++) {
-                int row_buffer_index = i + m_row_start;
-                int col_buffer_index = j + m_column_start;
+                int row_buffer_index = m_row_start;
+                int col_buffer_index = m_column_start;
                 if (local_matrix[i][j] > global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index]) {
+                    /*
+                    if (rank == 0 && i == 0 && j == 4) {
+                        print_vector(global_row_buffer);
+                        print_vector(global_col_buffer);
+                        std::cout << local_matrix[i][j] << " is compared with: " << row_buffer_index << " [" << global_col_buffer[row_buffer_index] << "] + " << global_row_buffer[col_buffer_index] << "\n";
+                    }
+                    */
                     local_matrix[i][j] = global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index];
                 }
             }
