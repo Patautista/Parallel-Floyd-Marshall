@@ -112,9 +112,18 @@ inline void write_element_to_file(int value, std::ofstream& file) {
 }
 
 template <typename Func>
-inline void loop_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, Func func) {
+inline void loop_flat_matrix(const std::vector<int>& matrix, int n, const std::vector<int>& row_block_sizes, const std::vector<int>& col_block_sizes, int sqrt_p, Func func) {
     // Total number of elements
     int total_elements = n * n;
+
+    // Calculate block offsets (prefix sums of block sizes)
+    std::vector<int> row_offsets(sqrt_p + 1, 0);
+    std::vector<int> col_offsets(sqrt_p + 1, 0);
+
+    for (int i = 1; i <= sqrt_p; ++i) {
+        row_offsets[i] = row_offsets[i - 1] + row_block_sizes[i - 1];
+        col_offsets[i] = col_offsets[i - 1] + col_block_sizes[i - 1];
+    }
 
     #pragma omp parallel for
     for (int global_index = 0; global_index < total_elements; ++global_index) {
@@ -122,29 +131,42 @@ inline void loop_flat_matrix(const std::vector<int>& matrix, int n, int block_si
         int global_row = global_index / n;
         int global_col = global_index % n;
 
-        // Calculate the block row and block column
-        int block_row = global_row / block_size;
-        int block_col = global_col / block_size;
+        // Find which block the global row and column belong to
+        int block_row = 0, block_col = 0;
+        for (int i = 0; i < sqrt_p; ++i) {
+            if (global_row >= row_offsets[i] && global_row < row_offsets[i + 1]) {
+                block_row = i;
+            }
+            if (global_col >= col_offsets[i] && global_col < col_offsets[i + 1]) {
+                block_col = i;
+            }
+        }
 
         // Local row and column within the block
-        int row_in_block = global_row % block_size;
-        int col_in_block = global_col % block_size;
+        int row_in_block = global_row - row_offsets[block_row];
+        int col_in_block = global_col - col_offsets[block_col];
 
         // Calculate the block index and the index within the block
         int block_index = block_row * sqrt_p + block_col;
-        int index_in_block = row_in_block * block_size + col_in_block;
+        int index_in_block = row_in_block * col_block_sizes[block_col] + col_in_block;
 
-        // Calculate the final flat index
-        int flat_index = block_index * block_size * block_size + index_in_block;
+        // Calculate the final flat index for the flattened matrix
+        int flat_index = 0;
+        for (int i = 0; i < block_index; ++i) {
+            flat_index += row_block_sizes[i / sqrt_p] * col_block_sizes[i % sqrt_p];
+        }
+        flat_index += index_in_block;
 
         // Call the provided function with the value and its global position
         func(matrix[flat_index]);
     }
 }
 
-inline void print_flat_matrix(const std::vector<int>& matrix, int n, int block_size, int sqrt_p) {
+
+
+inline void print_flat_matrix(const std::vector<int>& matrix, int n, const std::vector<int>& row_block_sizes, const std::vector<int>& col_block_sizes, int sqrt_p) {
     int counter = 0;
-    loop_flat_matrix(matrix, n, block_size, sqrt_p, [&counter, &n](int value) {
+    loop_flat_matrix(matrix, n, row_block_sizes, col_block_sizes, sqrt_p, [&counter, &n](int value) {
         print_element(value); // Print the current element
         counter++; // Increment the counter
 
@@ -154,23 +176,12 @@ inline void print_flat_matrix(const std::vector<int>& matrix, int n, int block_s
         });
     std::cout << std::endl;
 }
-inline void write_flat_matrix_to_file(const std::vector<int>& matrix, int n, int block_size, int sqrt_p, const std::string& file_path) {
+inline void write_flat_matrix_to_file(const std::vector<int>& matrix, int n, const std::vector<int>& row_block_sizes, const std::vector<int>& col_block_sizes, int sqrt_p, const std::string& file_path) {
     std::ofstream file(file_path);
     if (!file.is_open()) {
         std::cerr << "Failed to open file for writing!" << std::endl;
         return;
     }
-
-    int counter = 0;
-
-    loop_flat_matrix(matrix, n,block_size, sqrt_p, [&counter, &n, &file](int value) {
-        write_element_to_file(value, file);
-        counter++; // Increment the counter
-
-        if (counter % n == 0) { // If we've printed 'n' elements, it's time for a newline
-            file << std::endl;
-        }
-        });
 
     file.close();
 }
