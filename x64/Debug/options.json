@@ -1,6 +1,0 @@
-{
-  "LogLevel": "INFO",
-  "InputPath": "C:\\Users\\caleb\\source\\repos\\ParallellFloyd-2DPipeline\\samples\\5\\matrix.txt",
-  "LogOutput": "floyd.log",
-  "Method": "Parallel"
-}

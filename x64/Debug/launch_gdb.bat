@@ -1,1 +1,0 @@
-start cmd /k gdb ParallellFloyd-2DPipeline.exe samples\1

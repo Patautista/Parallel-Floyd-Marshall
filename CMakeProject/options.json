@@ -1,0 +1,6 @@
+{
+  "LogLevel": "INFO",
+  "InputPath": "./samples/1/matrix.txt",
+  "LogOutput": "floyd.log",
+  "Method": "Parallel"
+}
