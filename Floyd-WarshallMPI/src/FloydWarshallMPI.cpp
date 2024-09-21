@@ -20,12 +20,6 @@ int main(int argc, char** argv) {
     const std::string file_path = current_path().string() + "/options.json";
 
     if (rank == MPI_ROOT) {
-        // Root process: read and serialize options
-        if (!options.load_from_file(file_path)) {
-            std::cerr << "Warning: '" << file_path << "' not found or is invalid. Please ensure the file exists with the correct structure." << "Currently looking in " << current_path().string() << std::endl;
-            FloydOptions::print_sample();
-            MPI_Abort(MPI_COMM_WORLD, 1);  // Exit with error code
-        }
         serialized_options = options.serialize(); // Serialize options to string
     }
 
@@ -49,14 +43,12 @@ int main(int argc, char** argv) {
 
     // Proceed with using the options object on all processes
     Logger& logger = Logger::getInstance();
-    logger.enableFileLogging(options.LogOutput);
-    logger.setLogLevel(logger.stringToLogLevel(options.LogLevel));
+    logger.enableFileLogging("./floyd.log");
+    logger.setLogLevel(LogLevel::INFO);
 
     // Success: You can use the options here
     if (rank == MPI_ROOT) {
-        std::cout << "LogLevel: " << options.LogLevel << std::endl;
         std::cout << "InputPath: " << options.InputPath << std::endl;
-        std::cout << "LogOutput: " << options.LogOutput << std::endl;
         std::cout << "Method: " << options.Method << std::endl;
     }
 

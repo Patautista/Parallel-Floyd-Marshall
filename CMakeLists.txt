@@ -12,4 +12,4 @@ endif()
 project ("ParallellFloyd-2DPipeline")
 
 # Include sub-projects.
-add_subdirectory ("CMakeProject")
+add_subdirectory ("Floyd-WarshallMPI")

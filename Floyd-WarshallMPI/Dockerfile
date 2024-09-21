@@ -18,7 +18,7 @@ USER mpiuser
 WORKDIR /usr/src/app/
 
 # Copy the entire project into the container
-COPY --chown=mpiuser:mpiuser CMakeProject .
+COPY --chown=mpiuser:mpiuser Floyd-WarshallMPI .
 
 # Create the build directory and run CMake
 RUN mkdir build && cd build \

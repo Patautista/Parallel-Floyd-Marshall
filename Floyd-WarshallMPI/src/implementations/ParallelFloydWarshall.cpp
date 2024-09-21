@@ -7,17 +7,17 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
-#include "Logger.h"
-#include "Matrix.h"
 #include <omp.h>
-#include "../FloydWarshallAllPairs/FloydOptions.cpp"
+#include "../../include/Logger.h"
+#include "../options/FloydOptions.cpp"
+#include "../../include/Matrix.h"
 
 #define INF INT_MAX
 #define MPI_ROOT 0
 
 class ParallelFloydWarshall {
 public:
-    ParallelFloydWarshall(FloydOptions& options) : m_options(options){
+    ParallelFloydWarshall(const FloydOptions& options) : m_options(options){
         
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
