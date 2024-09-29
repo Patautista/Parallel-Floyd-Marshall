@@ -178,7 +178,7 @@ private:
 
         for (int k = 0; k < n; k++) {
 
-            broadcast_in_loop(k, rank, size, comm, local_matrix, global_row_buffer, sqrt_p);
+            broadcast_in_loop(k, rank, size, comm, local_matrix, global_row_buffer, sqrt_p, true);
 
             if (rank == MPI_ROOT) {
                 for (int j = 0; j < n; j++) {
@@ -255,10 +255,10 @@ private:
     void broadcast_in_loop(int k, int rank, int size, MPI_Comm comm,
         std::vector<std::vector<int>>& local_matrix,
         std::vector<int>& global_row_buffer,
-        int sqrt_p) {
+        int sqrt_p, bool is_row_broadcast) {
 
         std::vector<int> broadcast_buffer(m_base_block_size, 0);
-        std::vector<int> row_senders = {};
+        std::vector<int> senders = {};
 
         // Calculate the grid index for the row that contains 'k'
         int k_grid_index = (k < m_base_block_size + (n % sqrt_p)) ? 0 : int((k - (n % sqrt_p)) / m_base_block_size);
@@ -267,28 +267,30 @@ private:
         // Identify the processes that contain the row 'k'
         for (int i = 0; i < size; i++) {
             MPI_Cart_coords(comm, i, 2, coords);
-            if (coords[0] == k_grid_index) {
-                row_senders.push_back(i);
+            if ((is_row_broadcast && coords[0] == k_grid_index) || (!is_row_broadcast && coords[1] == k_grid_index)) {
+                senders.push_back(i);
             }
         }
 
         // Broadcast the row 'k' from each sender process and update the global row buffer
-        for (int i = 0; i < row_senders.size(); i++) {
-            if (rank == row_senders[i]) {
-                int k_row_in_local_matrix = k - m_row_start;
+        for (int i = 0; i < senders.size(); i++) {
+            if (rank == senders[i]) {
+                int start = is_row_broadcast ? m_row_start : m_column_start;
+                int k_row_in_local_matrix = k - start;
 
                 #pragma omp parallel for
-                for (int j = 0; j < process_datas[row_senders[i]].row_count; j++) {
+                for (int j = 0; j < process_datas[senders[i]].row_count; j++) {
                     broadcast_buffer[j] = local_matrix[k_row_in_local_matrix][j];
                 }
             }
 
             // Broadcast the row buffer from the current sender to all processes
-            MPI_Bcast(broadcast_buffer.data(), process_datas[row_senders[i]].row_count, MPI_INT, row_senders[i], MPI_COMM_WORLD);
+            MPI_Bcast(broadcast_buffer.data(), process_datas[senders[i]].row_count, MPI_INT, senders[i], MPI_COMM_WORLD);
 
             // Copy the broadcasted row into the appropriate position in the global row buffer
+            int offset = is_row_broadcast ? process_datas[senders[i]].column_start : process_datas[senders[i]].row_start;
             std::copy(broadcast_buffer.begin(), broadcast_buffer.end(),
-                global_row_buffer.begin() + process_datas[row_senders[i]].column_start);
+                global_row_buffer.begin() + offset);
         }
     }
 
