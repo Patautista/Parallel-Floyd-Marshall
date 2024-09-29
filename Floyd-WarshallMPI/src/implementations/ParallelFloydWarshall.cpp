@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <climits>
+#include <format>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -14,6 +15,17 @@
 
 #define INF INT_MAX
 #define MPI_ROOT 0
+
+class ProcessData {
+    public:
+        int row_count;
+        int col_count;
+
+        int row_start;
+        int row_end;
+        int column_start;
+        int column_end;
+};
 
 class ParallelFloydWarshall {
 public:
@@ -38,8 +50,7 @@ private:
     int m_column_start;
     int m_column_end;
 
-    std::vector<int> m_row_block_sizes;
-    std::vector<int> m_col_block_sizes;
+    std::vector<ProcessData> process_datas;
 
     Logger& m_logger = Logger::getInstance();
     std::stringstream m_log_stream;
@@ -54,15 +65,20 @@ private:
         int col_block = rank % sqrt_p;
         int remainder = n % sqrt_p;
 
-        if (rank == MPI_ROOT) {
-            m_row_block_sizes.resize(size);
-            m_col_block_sizes.resize(size);
+        process_datas.resize(size);
 
-            for (int p = 0; p < size; ++p) {
-                auto [p_row_size, p_col_size] = get_process_block_sizes(p, n, sqrt_p);
-                m_row_block_sizes[p] = p_row_size;
-                m_col_block_sizes[p] = p_col_size;
-            }
+        for (int p = 0; p < size; ++p) {
+            auto [p_row_size, p_col_size] = get_process_block_sizes(p, n, sqrt_p);
+            int p_row_block = p / sqrt_p;
+            int p_col_block = p % sqrt_p;
+            process_datas[p].row_count = p_row_size;
+            process_datas[p].col_count = p_col_size;
+            
+            process_datas[p].row_start = (p_row_block < remainder) ? p_row_block * (m_base_block_size + remainder) : p_row_block * m_base_block_size + remainder;
+            process_datas[p].row_end = process_datas[p].row_start + process_datas[p].col_count - 1;
+            
+            process_datas[p].column_start = (p_col_block < remainder) ? p_col_block * (m_base_block_size + 1) : p_col_block * m_base_block_size + remainder;
+            process_datas[p].column_end = process_datas[p].column_start + process_datas[p].row_count - 1;
         }
 
         m_row_start = (row_block < remainder) ? row_block * (m_base_block_size + 1) : row_block * m_base_block_size + remainder;
@@ -88,7 +104,7 @@ private:
 
             int last_row_owner = (k_grid_index * sqrt_p) + sqrt_p - 1;
 
-            if (should_send_row(k, sqrt_p, process_grid_row)) {
+            if (should_send_row(k, sqrt_p)) {
                 int local_row_index = k - m_row_start;
 
                 #pragma omp parallel for
@@ -141,7 +157,7 @@ private:
             update_local_matrix(local_matrix, global_row_buffer, global_col_buffer, process_grid_row, process_grid_col, k);
         }
     }
-    void write_matrix_to_file_parallel(std::vector<std::vector<int>>& local_matrix, int n, int sqrt_p, const std::string& file_path) {
+    void write_matrix_to_file_parallel(std::vector<std::vector<int>>& local_matrix, int sqrt_p, MPI_Comm& comm, const std::string& file_path) {
 
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -162,35 +178,7 @@ private:
 
         for (int k = 0; k < n; k++) {
 
-            int k_grid_index = k < m_base_block_size + (n % sqrt_p) ? 0 : int((k - (n % sqrt_p)) / m_base_block_size);
-
-            int last_row_owner = (k_grid_index * sqrt_p) + sqrt_p - 1;
-
-            if (should_send_row(k, sqrt_p, process_grid_row)) {
-                int local_row_index = k - m_row_start;
-
-                #pragma omp parallel for
-                for (int j = 0; j < m_col_count; j++) {
-                    global_row_buffer[(m_column_start) + j] = local_matrix[local_row_index][j];
-                }
-
-                if (process_grid_col > 0) {
-                    int rec_partner = rank - 1;
-
-                    std::vector<int> temp(m_column_start);
-
-                    MPI_Recv(temp.data(), m_column_start, MPI_INT, rec_partner, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-                    std::copy(temp.begin(), temp.end(), global_row_buffer.begin());
-                }
-
-                if (rank != last_row_owner && rank + 1 < size) {
-                    int partner = rank + 1;
-                    MPI_Send(global_row_buffer.data(), m_column_start + m_col_count, MPI_INT, partner, 1, MPI_COMM_WORLD);
-                }
-            }
-
-            MPI_Bcast(global_row_buffer.data(), n, MPI_INT, last_row_owner, MPI_COMM_WORLD);
+            broadcast_in_loop(k, rank, size, comm, local_matrix, global_row_buffer, sqrt_p);
 
             if (rank == MPI_ROOT) {
                 for (int j = 0; j < n; j++) {
@@ -264,7 +252,48 @@ private:
         }
     }
 
-    bool should_send_row(int& k, int& sqrt_p, int& grid_row) {
+    void broadcast_in_loop(int k, int rank, int size, MPI_Comm comm,
+        std::vector<std::vector<int>>& local_matrix,
+        std::vector<int>& global_row_buffer,
+        int sqrt_p) {
+
+        std::vector<int> broadcast_buffer(m_base_block_size, 0);
+        std::vector<int> row_senders = {};
+
+        // Calculate the grid index for the row that contains 'k'
+        int k_grid_index = (k < m_base_block_size + (n % sqrt_p)) ? 0 : int((k - (n % sqrt_p)) / m_base_block_size);
+        int coords[] = { 0, 0 };
+
+        // Identify the processes that contain the row 'k'
+        for (int i = 0; i < size; i++) {
+            MPI_Cart_coords(comm, i, 2, coords);
+            if (coords[0] == k_grid_index) {
+                row_senders.push_back(i);
+            }
+        }
+
+        // Broadcast the row 'k' from each sender process and update the global row buffer
+        for (int i = 0; i < row_senders.size(); i++) {
+            if (rank == row_senders[i]) {
+                int k_row_in_local_matrix = k - m_row_start;
+
+                #pragma omp parallel for
+                for (int j = 0; j < process_datas[row_senders[i]].row_count; j++) {
+                    broadcast_buffer[j] = local_matrix[k_row_in_local_matrix][j];
+                }
+            }
+
+            // Broadcast the row buffer from the current sender to all processes
+            MPI_Bcast(broadcast_buffer.data(), process_datas[row_senders[i]].row_count, MPI_INT, row_senders[i], MPI_COMM_WORLD);
+
+            // Copy the broadcasted row into the appropriate position in the global row buffer
+            std::copy(broadcast_buffer.begin(), broadcast_buffer.end(),
+                global_row_buffer.begin() + process_datas[row_senders[i]].column_start);
+        }
+    }
+
+
+    bool should_send_row(int& k, int& sqrt_p) {
         return k >= m_row_start && k < m_row_start + m_row_count;
     }
     bool should_send_column(int& k, int& sqrt_p, int& grid_col) {
@@ -288,9 +317,9 @@ public:
         std::vector<std::vector<int>> local_matrix(m_row_count, std::vector<int>(m_col_count));
         read_matrix_from_file_parallel(local_matrix, sqrt_p);
 
-        floyd_all_pairs_parallel(local_matrix, n, grid_comm, sqrt_p);
+        //floyd_all_pairs_parallel(local_matrix, n, grid_comm, sqrt_p);
 
-        write_matrix_to_file_parallel(local_matrix, n, sqrt_p, m_options.InputPath + "_result_parallel.txt");
+        write_matrix_to_file_parallel(local_matrix, sqrt_p, grid_comm, m_options.InputPath + "_result_parallel.txt");
 
         MPI_Comm_free(&grid_comm);
     }
@@ -318,46 +347,5 @@ private:
                 }
             }
         }
-    }
-
-    void gather_matrix(const std::vector<std::vector<int>>& local_matrix, std::vector<int>& full_matrix, int sqrt_p) {
-        int rank, size;
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-        // Calculate the local matrix size (number of elements in each process's submatrix)
-        int local_matrix_size = m_col_count * m_row_count;
-
-        // Flatten the local submatrix into a 1D vector
-        std::vector<int> flat_local_matrix(local_matrix_size);
-        for (int i = 0; i < m_row_count; ++i) {
-            std::copy(local_matrix[i].begin(), local_matrix[i].end(), flat_local_matrix.begin() + i * m_col_count);
-        }
-
-        if (false) {
-            std::cout << "rank :" << rank << "\n";
-            print_vector(flat_local_matrix);
-        }
-
-        // Prepare recv_counts and displs arrays on the root process
-        std::vector<int> recv_counts(size);
-        std::vector<int> displs(size);
-
-        if (rank == MPI_ROOT) {
-            recv_counts[0] = m_row_count * m_col_count;
-            int next = m_row_count * m_col_count;
-            for (int i = 1; i < size; ++i) {
-                // Each process contributes a local_matrix_size number of elements
-                recv_counts[i] = m_row_block_sizes[i] * m_col_block_sizes[i];
-                displs[i] = next;
-                next += m_row_block_sizes[i] * m_col_block_sizes[i];
-            }
-        }
-
-        // Use MPI_Gatherv to gather all the submatrices into the full matrix on the root process
-        MPI_Gatherv(flat_local_matrix.data(), local_matrix_size, MPI_INT,
-            rank == MPI_ROOT ? full_matrix.data() : nullptr,
-            recv_counts.data(), displs.data(), MPI_INT,
-            MPI_ROOT, MPI_COMM_WORLD);
     }
 };

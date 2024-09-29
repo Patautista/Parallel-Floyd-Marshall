@@ -22,12 +22,14 @@ inline void print_matrix(const std::vector<std::vector<int>>& matrix) {
     std::cout << stream.str();
 }
 
-inline void print_vector(std::vector<int> const& input)
+inline std::stringstream print_vector(std::vector<int> const& input)
 {
+    std::stringstream stream;
     for (int i = 0; i < input.size(); i++) {
-        std::cout << input.at(i) << ' ';
+        stream << input.at(i) << ' ';
     }
-    std::cout << "\n";
+    stream << "\n";
+    return stream;
 }
 
 inline void read_matrix_from_file(std::vector<std::vector<int>>& matrix, const std::string& filename) {
