@@ -42,13 +42,6 @@ public:
 private:
     FloydOptions m_options;
     int m_base_block_size;
-    int m_row_count;
-    int m_col_count;
-
-    int m_row_start;
-    int m_row_end;
-    int m_column_start;
-    int m_column_end;
 
     std::vector<ProcessData> process_datas;
 
@@ -57,9 +50,6 @@ private:
 
     void init_process_data(int sqrt_p) {
         m_base_block_size = int(n / sqrt_p);
-        auto [a, b] = get_process_block_sizes(rank, n, sqrt_p);
-        m_row_count = a;
-        m_col_count = b;
 
         int row_block = rank / sqrt_p;
         int col_block = rank % sqrt_p;
@@ -80,11 +70,6 @@ private:
             process_datas[p].column_start = (p_col_block < remainder) ? p_col_block * (m_base_block_size + 1) : p_col_block * m_base_block_size + remainder;
             process_datas[p].column_end = process_datas[p].column_start + process_datas[p].row_count - 1;
         }
-
-        m_row_start = (row_block < remainder) ? row_block * (m_base_block_size + 1) : row_block * m_base_block_size + remainder;
-        m_row_end = m_row_start + m_col_count - 1;
-        m_column_start = (col_block < remainder) ? col_block * (m_base_block_size + 1) : col_block * m_base_block_size + remainder;
-        m_column_end = m_column_start + m_row_count - 1;
     }
 
     void floyd_all_pairs_parallel(std::vector<std::vector<int>>& local_matrix, int n, MPI_Comm& comm, int sqrt_p) {
@@ -194,8 +179,8 @@ private:
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < n; j++) {
                 file >> value;
-                if (i >= m_row_start && i < m_row_start + m_row_count && j >= m_column_start && j < m_column_start + m_col_count) {
-                    local_matrix[i - m_row_start][j - m_column_start] = value;
+                if (i >= process_datas[rank].row_start && i < process_datas[rank].row_start + process_datas[rank].row_count && j >= process_datas[rank].column_start && j < process_datas[rank].column_start + process_datas[rank].col_count) {
+                    local_matrix[i - process_datas[rank].row_start][j - process_datas[rank].column_start] = value;
                 }
             }
         }
@@ -225,7 +210,7 @@ private:
         for (int i = 0; i < senders.size(); i++) {
             int broadcast_count = is_row_broadcast ? process_datas[senders[i]].col_count : process_datas[senders[i]].row_count;
             if (rank == senders[i]) {
-                int p_offset = is_row_broadcast ? m_row_start : m_column_start;
+                int p_offset = is_row_broadcast ? process_datas[rank].row_start : process_datas[rank].column_start;
                 int k_in_local_matrix = k - p_offset;
 
                 #pragma omp parallel for
@@ -249,13 +234,6 @@ private:
         }
     }
 
-
-    bool should_send_row(int& k, int& sqrt_p) {
-        return k >= m_row_start && k < m_row_start + m_row_count;
-    }
-    bool should_send_column(int& k, int& sqrt_p, int& grid_col) {
-        return k>= m_column_start && k < m_column_start + m_col_count;
-    }
 public:
     void execute() {
         MPI_Comm grid_comm;
@@ -271,7 +249,7 @@ public:
         int sqrt_p = static_cast<int>(sqrt(size));
         init_process_data(sqrt_p);
 
-        std::vector<std::vector<int>> local_matrix(m_row_count, std::vector<int>(m_col_count));
+        std::vector<std::vector<int>> local_matrix(process_datas[rank].row_count, std::vector<int>(process_datas[rank].col_count));
         read_matrix_from_file_parallel(local_matrix, sqrt_p);
 
         floyd_all_pairs_parallel(local_matrix, n, grid_comm, sqrt_p);
@@ -297,8 +275,8 @@ private:
         #pragma omp parallel for
         for (int i = 0; i < local_matrix.size(); i++) {
             for (int j = 0; j < local_matrix[i].size(); j++) {
-                int row_buffer_index = i + m_row_start;
-                int col_buffer_index = j + m_column_start;
+                int row_buffer_index = i + process_datas[rank].row_start;
+                int col_buffer_index = j + process_datas[rank].column_start;
                 if (local_matrix[i][j] > global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index]) {
                     local_matrix[i][j] = global_col_buffer[row_buffer_index] + global_row_buffer[col_buffer_index];
                 }
