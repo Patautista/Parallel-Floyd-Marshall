@@ -257,7 +257,7 @@ private:
         std::vector<int>& global_row_buffer,
         int sqrt_p, bool is_row_broadcast) {
 
-        std::vector<int> broadcast_buffer(m_base_block_size, 0);
+        std::vector<int> broadcast_buffer(m_base_block_size + (n % sqrt_p), 0);
         std::vector<int> senders = {};
 
         // Calculate the grid index for the row that contains 'k'
