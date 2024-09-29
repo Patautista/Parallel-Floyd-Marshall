@@ -274,18 +274,24 @@ private:
 
         // Broadcast the row 'k' from each sender process and update the global row buffer
         for (int i = 0; i < senders.size(); i++) {
+            int broadcast_count = is_row_broadcast ? process_datas[senders[i]].col_count : process_datas[senders[i]].row_count;
             if (rank == senders[i]) {
-                int start = is_row_broadcast ? m_row_start : m_column_start;
-                int k_row_in_local_matrix = k - start;
+                int p_offset = is_row_broadcast ? m_row_start : m_column_start;
+                int k_in_local_matrix = k - p_offset;
 
                 #pragma omp parallel for
-                for (int j = 0; j < process_datas[senders[i]].row_count; j++) {
-                    broadcast_buffer[j] = local_matrix[k_row_in_local_matrix][j];
+                for (int j = 0; j < broadcast_count; j++) {
+                    if (is_row_broadcast) {
+                        broadcast_buffer[j] = local_matrix[k_in_local_matrix][j];  // Row case
+                    }
+                    else {
+                        broadcast_buffer[j] = local_matrix[j][k_in_local_matrix];  // Column case
+                    }
                 }
             }
 
             // Broadcast the row buffer from the current sender to all processes
-            MPI_Bcast(broadcast_buffer.data(), process_datas[senders[i]].row_count, MPI_INT, senders[i], MPI_COMM_WORLD);
+            MPI_Bcast(broadcast_buffer.data(), broadcast_count, MPI_INT, senders[i], MPI_COMM_WORLD);
 
             // Copy the broadcasted row into the appropriate position in the global row buffer
             int offset = is_row_broadcast ? process_datas[senders[i]].column_start : process_datas[senders[i]].row_start;
