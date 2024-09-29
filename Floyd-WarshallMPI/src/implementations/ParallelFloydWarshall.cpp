@@ -229,8 +229,7 @@ private:
 
             // Copy the broadcasted row into the appropriate position in the global row buffer
             int offset = is_row_broadcast ? process_datas[senders[i]].column_start : process_datas[senders[i]].row_start;
-            std::copy(broadcast_buffer.begin(), broadcast_buffer.end(),
-                global_row_buffer.begin() + offset);
+            std::copy(broadcast_buffer.begin(), broadcast_buffer.end(), global_row_buffer.begin() + offset);
         }
     }
 
