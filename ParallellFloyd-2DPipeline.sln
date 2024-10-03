@@ -8,31 +8,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		samples\visualization.py = samples\visualization.py
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Implementation", "Implementation\Implementation.vcxitems", "{5B7BE320-9047-490F-9632-C2F34CF07365}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Shared Libraries", "Shared Libraries", "{F8D18BBA-A0C5-4B5B-AACB-812F44AE62D5}"
-EndProject
 Global
-	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|ARM = Debug|ARM
-		Debug|ARM64 = Debug|ARM64
-		Debug|x64 = Debug|x64
-		Debug|x86 = Debug|x86
-		Release|ARM = Release|ARM
-		Release|ARM64 = Release|ARM64
-		Release|x64 = Release|x64
-		Release|x86 = Release|x86
-	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
-		{5B7BE320-9047-490F-9632-C2F34CF07365} = {F8D18BBA-A0C5-4B5B-AACB-812F44AE62D5}
-	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {5A3467E6-D470-46DF-A0D4-3F89E9AAD2E5}
-	EndGlobalSection
-	GlobalSection(SharedMSBuildProjectFiles) = preSolution
-		Implementation\Implementation.vcxitems*{5b7be320-9047-490f-9632-c2f34cf07365}*SharedItemsImports = 9
 	EndGlobalSection
 EndGlobal

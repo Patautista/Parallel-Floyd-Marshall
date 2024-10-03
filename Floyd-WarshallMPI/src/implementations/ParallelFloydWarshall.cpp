@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <ctime>
 #include <climits>
-#include <format>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
